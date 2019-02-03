@@ -13,6 +13,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const DefaultTimeout = time.Second * 5
+
 type Client struct {
 	Path             string
 	ErrorHandler     func(error)
@@ -136,8 +138,8 @@ func (ln *Client) listen() error {
 
 func (ln *Client) ListenForInvoices(timeout time.Duration) {
 	for {
-		res, err := ln.CallWithCustomTimeout(
-			"waitanyinvoice", timeout, strconv.Itoa(ln.LastInvoiceIndex))
+		res, err := ln.CallWithCustomTimeout(timeout,
+			"waitanyinvoice", strconv.Itoa(ln.LastInvoiceIndex))
 		if err != nil {
 			ln.ErrorHandler(err)
 			time.Sleep(5 * time.Second)
@@ -152,10 +154,10 @@ func (ln *Client) ListenForInvoices(timeout time.Duration) {
 }
 
 func (ln *Client) Call(method string, params ...string) (gjson.Result, error) {
-	return ln.CallWithCustomTimeout(method, 3*time.Second, params...)
+	return ln.CallWithCustomTimeout(DefaultTimeout, method, params...)
 }
 
-func (ln *Client) CallWithCustomTimeout(method string, timeout time.Duration, params ...string) (gjson.Result, error) {
+func (ln *Client) CallWithCustomTimeout(timeout time.Duration, method string, params ...string) (gjson.Result, error) {
 
 	id := strconv.Itoa(ln.reqcount)
 
