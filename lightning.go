@@ -89,21 +89,31 @@ func (ln *Client) call(
 	params ...interface{},
 ) (res gjson.Result, err error) {
 	var payload interface{}
+	var sparams []interface{}
+
 	if params == nil {
 		payload = make([]string, 0)
-	} else {
-		if len(params) == 1 {
-			if named, ok := params[0].(map[string]interface{}); ok {
-				payload = named
-			}
-		} else {
-			sparams := make([]interface{}, len(params))
-			for i, iparam := range params {
-				sparams[i] = iparam
-			}
-			payload = sparams
+		goto gotpayload
+	}
+
+	if len(params) == 1 {
+		if named, ok := params[0].(map[string]interface{}); ok {
+			payload = named
+			goto gotpayload
 		}
 	}
+
+	sparams = make([]interface{}, len(params))
+	for i, iparam := range params {
+		sparams[i] = iparam
+	}
+	payload = sparams
+
+	if payload == nil {
+		payload = make([]string, 0)
+	}
+
+gotpayload:
 
 	conn, err := net.Dial("unix", ln.Path)
 	if err != nil {
