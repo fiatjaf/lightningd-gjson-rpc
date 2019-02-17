@@ -43,3 +43,29 @@ func handlePaymentReceived(inv gjson.Result) {
     log.Print("one of our invoices was paid: " + hash)
 }
 ```
+
+### Passing parameters
+
+There are three modes of passing parameters, you can call either:
+
+```go
+# 1. `Call` with a list of parameters, in the order defined by each command;
+ln.Call("invoice", 1000000, "my-label", "my description", 3600)
+
+# 2. `Call` with a single `map[string]interface{}` with all parameters properly named; or
+ln.Call("invoice", map[string]interface{
+    "msatoshi": "1000000,
+    "label": "my-label",
+    "description": "my description",
+    "preimage": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+})
+
+# 3. `CallNamed` with a list of keys and values passed in the proper order.
+ln.CallNamed("invoice",
+    "msatoshi", "1000000,
+    "label", "my-label",
+    "description", "my description",
+    "preimage", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "expiry", 3600,
+)
+```

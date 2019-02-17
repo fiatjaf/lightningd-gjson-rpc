@@ -2,6 +2,7 @@ package lightning
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -48,27 +49,59 @@ func (ln *Client) Call(method string, params ...interface{}) (gjson.Result, erro
 	return ln.CallWithCustomTimeout(DefaultTimeout, method, params...)
 }
 
+func (ln *Client) CallNamed(method string, params ...interface{}) (gjson.Result, error) {
+	return ln.CallNamedWithCustomTimeout(DefaultTimeout, method, params...)
+}
+
 func (ln *Client) CallWithCustomTimeout(
 	timeout time.Duration,
 	method string,
 	params ...interface{},
 ) (res gjson.Result, err error) {
-	return ln.callWithCustomTimeoutAndRetry(timeout, 0, method, params...)
+	return ln.call(timeout, 0, method, params...)
 }
 
-func (ln *Client) callWithCustomTimeoutAndRetry(
+func (ln *Client) CallNamedWithCustomTimeout(
+	timeout time.Duration,
+	method string,
+	params ...interface{},
+) (res gjson.Result, err error) {
+	if len(params)%2 != 0 {
+		err = errors.New("Wrong number of parameters.")
+		return
+	}
+
+	named := make(map[string]interface{})
+	for i := 0; i < len(params); i += 2 {
+		if key, ok := params[i].(string); ok {
+			value := params[i+1]
+			named[key] = value
+		}
+	}
+
+	return ln.call(timeout, 0, method, named)
+}
+
+func (ln *Client) call(
 	timeout time.Duration,
 	retrySequence int,
 	method string,
 	params ...interface{},
 ) (res gjson.Result, err error) {
-	var sparams []string
+	var payload interface{}
 	if params == nil {
-		sparams = make([]string, 0)
+		payload = make([]string, 0)
 	} else {
-		sparams = make([]string, len(params))
-		for i, iparam := range params {
-			sparams[i] = fmt.Sprintf("%v", iparam)
+		if len(params) == 1 {
+			if named, ok := params[0].(map[string]interface{}); ok {
+				payload = named
+			}
+		} else {
+			sparams := make([]interface{}, len(params))
+			for i, iparam := range params {
+				sparams[i] = iparam
+			}
+			payload = sparams
 		}
 	}
 
@@ -76,7 +109,7 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 	if err != nil {
 		if retrySequence < 6 {
 			time.Sleep(time.Second * 2 * (time.Duration(retrySequence) + 1))
-			return ln.callWithCustomTimeoutAndRetry(timeout, retrySequence+1, method, params...)
+			return ln.call(timeout, retrySequence+1, method, params...)
 		} else {
 			err = ErrorConnect{ln.Path, err.Error()}
 			return
@@ -88,7 +121,7 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 		Version: version,
 		Id:      "0",
 		Method:  method,
-		Params:  sparams,
+		Params:  payload,
 	})
 
 	respchan := make(chan gjson.Result)
@@ -129,10 +162,10 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 const version = "2.0"
 
 type jsonrpcmessage struct {
-	Version string   `json:"jsonrpc"`
-	Id      string   `json:"id"`
-	Method  string   `json:"method"`
-	Params  []string `json:"params"`
+	Version string      `json:"jsonrpc"`
+	Id      string      `json:"id"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
 }
 
 type jsonrpcresponse struct {
