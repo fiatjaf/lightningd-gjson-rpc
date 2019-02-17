@@ -1,10 +1,10 @@
-Simple interface for [lightningd](https://github.com/ElementsProject/lightning/). All methods return [gjson.Result](https://github.com/tidwall/gjson).
+Useful and fast interface for [lightningd](https://github.com/ElementsProject/lightning/). All methods return [gjson.Result](https://godoc.org/github.com/tidwall/gjson#Result), which is a good thing (unless your application relies on a lot of information from many different lightningd responses) and you can [learn it in 10 seconds](https://github.com/tidwall/gjson#get-a-value).
 
-Comes with a practical _invoice listener_ method.
+[![godoc.org](https://img.shields.io/badge/reference-godoc-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc)
 
-[godoc.org](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc)
+This is a simple and resistant client. It comes with a practical **invoice listener** method and nice (could be nicer?) defaults for retrying and connecting to faulty lightningd nodes.
 
-Usage:
+### Usage
 
 ```go
 package main
@@ -39,7 +39,7 @@ func handlePaymentReceived(inv gjson.Result) {
     index := inv.Get("pay_index").Int()
     saveSomewhere(index)
 
-    hash := inv.Get("payment_hash")
+    hash := inv.Get("payment_hash").String()
     log.Print("one of our invoices was paid: " + hash)
 }
 ```
