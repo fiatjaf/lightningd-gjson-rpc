@@ -74,7 +74,8 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 
 	conn, err := net.Dial("unix", ln.Path)
 	if err != nil {
-		if retrySequence < 10 {
+		if retrySequence < 6 {
+			time.Sleep(time.Second * 2 * (time.Duration(retrySequence) + 1))
 			return ln.callWithCustomTimeoutAndRetry(timeout, retrySequence+1, method, params...)
 		} else {
 			err = ErrorConnect{ln.Path, err.Error()}
