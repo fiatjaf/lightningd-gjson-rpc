@@ -17,26 +17,27 @@ import (
 var ln *lightning.Client
 
 func main () {
-    ln, err = lightning.Connect("/home/whatever/.lightning/lightning-rpc")
-    if err != nil {
-        log.Fatal("couldn't connect to lightning-rpc")
+    lastinvoiceindex := getFromSomewhereOrStartAtZero()
+
+    ln = &lightning.Client{
+        Path:             "/home/whatever/.lightning/lightning-rpc",
+        LastInvoiceIndex: lastinvoiceindex,
+        PaymentHandler:   handleInvoicePaid,
     }
-    ln.LastInvoiceIndex = 0
-    ln.PaymentHandler = handlePaymentReceived
     ln.ListenForInvoices()
 
     nodeinfo, err := ln.Call("getinfo")
     if err != nil {
-        log.Fatal("getinfo timeout")
+        log.Fatal("getinfo error: " + err.Error())
     }
 
     log.Print(nodeinfo.Get("alias").String())
 }
 
-// this is the result of `waitanyinvoice`
+// this is called with the result of `waitanyinvoice`
 func handlePaymentReceived(inv gjson.Result) {
-    // save this somewhere so we can start from here next time
     index := inv.Get("pay_index").Int()
+    saveSomewhere(index)
 
     hash := inv.Get("payment_hash")
     log.Print("one of our invoices was paid: " + hash)
