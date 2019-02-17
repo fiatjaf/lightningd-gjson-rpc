@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 )
 
 const DefaultTimeout = time.Second * 5
+const InvoiceListeningTimeout = time.Minute * 150
 
 type Client struct {
 	Path             string
@@ -43,43 +45,52 @@ func Connect(path string) (*Client, error) {
 		return ln, err
 	}
 
-	err = ln.listen()
-	return ln, err
+	ln.listen()
+	return ln, nil
 }
 
-func (ln *Client) reconnect() error {
+func (ln *Client) reconnect() {
 	if ln.conn != nil {
 		err := ln.conn.Close()
 		if err != nil {
 			log.Print("error closing old connection: " + err.Error())
 		}
+		ln.conn = nil
 	}
 
 	err := ln.connect()
 	if err != nil {
-		return err
+		log.Print("error reconnecting: " + err.Error())
+		log.Print("will try again.")
+		time.Sleep(time.Second * 30)
+		ln.reconnect()
+		return
 	}
 
-	err = ln.listen()
-	return err
+	ln.listen()
+	go ln.listenforinvoices()
 }
 
 func (ln *Client) connect() error {
 	log.Print("connecting to " + ln.Path)
 	conn, err := net.Dial("unix", ln.Path)
 	if err != nil {
-		return err
+		return fmt.Errorf("Unable to dial socket %s:%s", ln.Path, err.Error())
 	}
 
 	ln.conn = conn
 	return nil
 }
 
-func (ln *Client) listen() error {
+func (ln *Client) listen() {
 	errored := make(chan bool)
 
 	go func() {
 		for {
+			if ln.conn == nil {
+				break
+			}
+
 			message := make([]byte, 4096)
 			length, err := ln.conn.Read(message)
 			if err != nil {
@@ -100,7 +111,14 @@ func (ln *Client) listen() error {
 
 			var response JSONRPCResponse
 			err = json.Unmarshal(messagerunes, &response)
-			if err != nil || response.Error.Code != 0 {
+			if err != nil {
+				log.Print("json decoding failed: " + err.Error())
+				log.Print(string(messagerunes))
+				ln.ErrorHandler(err)
+				continue
+			}
+
+			if response.Error.Code != 0 {
 				if response.Error.Code != 0 {
 					err = errors.New(response.Error.Message)
 				}
@@ -132,13 +150,16 @@ func (ln *Client) listen() error {
 			break
 		}
 	}()
-
-	return nil
 }
 
-func (ln *Client) ListenForInvoices(timeout time.Duration) {
+func (ln *Client) listenforinvoices() {
 	for {
-		res, err := ln.CallWithCustomTimeout(timeout,
+		if ln.PaymentHandler == nil || ln.conn == nil {
+			log.Print("stopped listening for invoices")
+			return
+		}
+
+		res, err := ln.CallWithCustomTimeout(InvoiceListeningTimeout,
 			"waitanyinvoice", strconv.Itoa(ln.LastInvoiceIndex))
 		if err != nil {
 			ln.ErrorHandler(err)
@@ -151,6 +172,10 @@ func (ln *Client) ListenForInvoices(timeout time.Duration) {
 
 		ln.PaymentHandler(res)
 	}
+}
+
+func (ln *Client) ListenForInvoices() {
+	go ln.listenforinvoices()
 }
 
 func (ln *Client) Call(method string, params ...string) (gjson.Result, error) {
@@ -184,7 +209,7 @@ func (ln *Client) CallWithCustomTimeout(timeout time.Duration, method string, pa
 	case v := <-respchan:
 		return v, nil
 	case <-time.After(timeout):
-		log.Print(ln.reconnect())
+		ln.reconnect()
 		return gjson.Result{}, errors.New("timeout")
 	}
 }

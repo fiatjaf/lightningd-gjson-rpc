@@ -23,7 +23,7 @@ func main () {
     }
     ln.LastInvoiceIndex = 0
     ln.PaymentHandler = handlePaymentReceived
-    go ln.ListenForInvoices(time.Minute * 15)
+    ln.ListenForInvoices()
 
     nodeinfo, err := ln.Call("getinfo")
     if err != nil {
