@@ -2,7 +2,6 @@ package lightning
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,8 +13,6 @@ import (
 
 const DefaultTimeout = time.Second * 5
 const InvoiceListeningTimeout = time.Minute * 150
-
-var TimeoutError = errors.New("--timeout--")
 
 type Client struct {
 	Path             string
@@ -80,14 +77,14 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 		if retrySequence < 10 {
 			return ln.callWithCustomTimeoutAndRetry(timeout, retrySequence+1, method, params...)
 		} else {
-			err = fmt.Errorf("Unable to dial socket %s:%s", ln.Path, err.Error())
+			err = ErrorConnect{ln.Path, err.Error()}
 			return
 		}
 	}
 	defer conn.Close()
 
-	message, _ := json.Marshal(JSONRPCMessage{
-		Version: VERSION,
+	message, _ := json.Marshal(jsonrpcmessage{
+		Version: version,
 		Id:      "0",
 		Method:  method,
 		Params:  sparams,
@@ -98,17 +95,17 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 	go func() {
 		decoder := json.NewDecoder(conn)
 		for {
-			var response JSONRPCResponse
+			var response jsonrpcresponse
 			err := decoder.Decode(&response)
 			if err == io.EOF {
-				errchan <- err
+				errchan <- ErrorConnectionBroken{}
 				break
 			} else if err != nil {
-				errchan <- err
+				errchan <- ErrorJSONDecode{err.Error()}
 				break
 			} else if response.Error.Code != 0 {
-				errchan <- fmt.Errorf("lightningd replied with error: %s (%d)",
-					response.Error.Message, response.Error.Code)
+				errchan <- ErrorCommand{response.Error.Message, response.Error.Code}
+				break
 			}
 			respchan <- gjson.ParseBytes(response.Result)
 		}
@@ -123,21 +120,21 @@ func (ln *Client) callWithCustomTimeoutAndRetry(
 	case err = <-errchan:
 		return
 	case <-time.After(timeout):
-		err = TimeoutError
+		err = ErrorTimeout{int(timeout.Seconds())}
 		return
 	}
 }
 
-const VERSION = "2.0"
+const version = "2.0"
 
-type JSONRPCMessage struct {
+type jsonrpcmessage struct {
 	Version string   `json:"jsonrpc"`
 	Id      string   `json:"id"`
 	Method  string   `json:"method"`
 	Params  []string `json:"params"`
 }
 
-type JSONRPCResponse struct {
+type jsonrpcresponse struct {
 	Version string          `json:"jsonrpc"`
 	Id      string          `json:"id"`
 	Result  json.RawMessage `json:"result"`
@@ -145,4 +142,40 @@ type JSONRPCResponse struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+type ErrorConnect struct {
+	Path string
+	Msg  string
+}
+
+type ErrorCommand struct {
+	Msg  string
+	Code int
+}
+
+type ErrorTimeout struct {
+	Seconds int
+}
+
+type ErrorJSONDecode struct {
+	Msg string
+}
+
+type ErrorConnectionBroken struct{}
+
+func (c ErrorConnect) Error() string {
+	return fmt.Sprintf("unable to dial socket %s:%s", c.Path, c.Msg)
+}
+func (l ErrorCommand) Error() string {
+	return fmt.Sprintf("lightningd replied with error: %s (%d)", l.Msg, l.Code)
+}
+func (t ErrorTimeout) Error() string {
+	return fmt.Sprintf("call timed out after %ds", t.Seconds)
+}
+func (j ErrorJSONDecode) Error() string {
+	return "error decoding JSON response from lightningd: " + j.Msg
+}
+func (c ErrorConnectionBroken) Error() string {
+	return "got an EOF while reading response, it seems the connection is broken"
 }
