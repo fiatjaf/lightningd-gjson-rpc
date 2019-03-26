@@ -12,38 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const DefaultTimeout = time.Second * 5
-const InvoiceListeningTimeout = time.Minute * 150
-
-type Client struct {
-	Path             string
-	PaymentHandler   func(gjson.Result)
-	LastInvoiceIndex int
-}
-
-func (ln *Client) ListenForInvoices() {
-	go func() {
-		for {
-			if ln.PaymentHandler == nil {
-				log.Print("won't listen for invoices: no PaymentHandler.")
-				return
-			}
-
-			res, err := ln.CallWithCustomTimeout(InvoiceListeningTimeout,
-				"waitanyinvoice", ln.LastInvoiceIndex)
-			if err != nil {
-				log.Printf("error waiting for invoice %d: %s", ln.LastInvoiceIndex, err.Error())
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			index := res.Get("pay_index").Int()
-			ln.LastInvoiceIndex = int(index)
-
-			ln.PaymentHandler(res)
-		}
-	}()
-}
+var DefaultTimeout = time.Second * 5
 
 func (ln *Client) Call(method string, params ...interface{}) (gjson.Result, error) {
 	return ln.CallWithCustomTimeout(DefaultTimeout, method, params...)
