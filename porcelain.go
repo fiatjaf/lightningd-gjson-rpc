@@ -29,8 +29,12 @@ func (ln *Client) ListenForInvoices() {
 			res, err := ln.CallWithCustomTimeout(InvoiceListeningTimeout,
 				"waitanyinvoice", ln.LastInvoiceIndex)
 			if err != nil {
-				log.Printf("error waiting for invoice %d: %s", ln.LastInvoiceIndex, err.Error())
-				time.Sleep(5 * time.Second)
+				if _, ok := err.(ErrorTimeout); ok {
+					time.Sleep(time.Minute)
+				} else {
+					log.Printf("error waiting for invoice %d: %s", ln.LastInvoiceIndex, err.Error())
+					time.Sleep(5 * time.Second)
+				}
 				continue
 			}
 
