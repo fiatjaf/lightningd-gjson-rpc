@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"time"
 
@@ -20,14 +19,6 @@ func (ln *Client) Call(method string, params ...interface{}) (gjson.Result, erro
 
 func (ln *Client) CallNamed(method string, params ...interface{}) (gjson.Result, error) {
 	return ln.CallNamedWithCustomTimeout(DefaultTimeout, method, params...)
-}
-
-func (ln *Client) CallWithCustomTimeout(
-	timeout time.Duration,
-	method string,
-	params ...interface{},
-) (res gjson.Result, err error) {
-	return ln.call(timeout, 0, method, params...)
 }
 
 func (ln *Client) CallNamedWithCustomTimeout(
@@ -48,15 +39,14 @@ func (ln *Client) CallNamedWithCustomTimeout(
 		}
 	}
 
-	return ln.call(timeout, 0, method, named)
+	return ln.CallWithCustomTimeout(timeout, method, named)
 }
 
-func (ln *Client) call(
+func (ln *Client) CallWithCustomTimeout(
 	timeout time.Duration,
-	retrySequence int,
 	method string,
 	params ...interface{},
-) (res gjson.Result, err error) {
+) (gjson.Result, error) {
 	var payload interface{}
 	var sparams []interface{}
 
@@ -78,17 +68,43 @@ func (ln *Client) call(
 	}
 	payload = sparams
 
-	if payload == nil {
-		payload = make([]string, 0)
+gotpayload:
+	message := JSONRPCMessage{
+		Version: version,
+		Method:  method,
+		Params:  payload,
 	}
 
-gotpayload:
+	return ln.CallMessage(timeout, message)
+}
 
+func (ln *Client) CallMessage(timeout time.Duration, message JSONRPCMessage) (gjson.Result, error) {
+	bres, err := ln.CallMessageRaw(timeout, message)
+	if err != nil {
+		return gjson.Result{}, err
+	}
+	return gjson.ParseBytes(bres), nil
+}
+
+func (ln *Client) CallMessageRaw(timeout time.Duration, message JSONRPCMessage) ([]byte, error) {
+	message.Id = "0"
+	if message.Params == nil {
+		message.Params = make([]string, 0)
+	}
+	mbytes, _ := json.Marshal(message)
+	return ln.callMessageBytes(timeout, 0, mbytes)
+}
+
+func (ln *Client) callMessageBytes(
+	timeout time.Duration,
+	retrySequence int,
+	message []byte,
+) (res []byte, err error) {
 	conn, err := net.Dial("unix", ln.Path)
 	if err != nil {
 		if retrySequence < 6 {
 			time.Sleep(time.Second * 2 * (time.Duration(retrySequence) + 1))
-			return ln.call(timeout, retrySequence+1, method, params...)
+			return ln.callMessageBytes(timeout, retrySequence+1, message)
 		} else {
 			err = ErrorConnect{ln.Path, err.Error()}
 			return
@@ -96,19 +112,12 @@ gotpayload:
 	}
 	defer conn.Close()
 
-	message, _ := json.Marshal(jsonrpcmessage{
-		Version: version,
-		Id:      "0",
-		Method:  method,
-		Params:  payload,
-	})
-
-	respchan := make(chan gjson.Result)
+	respchan := make(chan []byte)
 	errchan := make(chan error)
 	go func() {
 		decoder := json.NewDecoder(conn)
 		for {
-			var response jsonrpcresponse
+			var response JSONRPCResponse
 			err := decoder.Decode(&response)
 			if err == io.EOF {
 				errchan <- ErrorConnectionBroken{}
@@ -120,11 +129,10 @@ gotpayload:
 				errchan <- ErrorCommand{response.Error.Message, response.Error.Code}
 				break
 			}
-			respchan <- gjson.ParseBytes(response.Result)
+			respchan <- response.Result
 		}
 	}()
 
-	log.Print("writing to lightningd: " + string(message))
 	conn.Write(message)
 
 	select {
@@ -140,14 +148,14 @@ gotpayload:
 
 const version = "2.0"
 
-type jsonrpcmessage struct {
+type JSONRPCMessage struct {
 	Version string      `json:"jsonrpc"`
 	Id      string      `json:"id"`
 	Method  string      `json:"method"`
 	Params  interface{} `json:"params"`
 }
 
-type jsonrpcresponse struct {
+type JSONRPCResponse struct {
 	Version string          `json:"jsonrpc"`
 	Id      string          `json:"id"`
 	Result  json.RawMessage `json:"result"`
