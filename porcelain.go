@@ -97,8 +97,11 @@ func (ln *Client) waitPaymentResolution(bolt11 string, attempt int) (success boo
 			return false, payment, nil
 		case "pending":
 			return ln.waitPaymentResolution(bolt11, attempt+1)
+		default:
+			return false, payment,
+				errors.New("payment in a weird state: " + payment.Get("status").String())
 		}
 	}
 
-	return false, payment, nil
+	return false, payment, errors.New("payment doesn't exist on `listpayments`")
 }
