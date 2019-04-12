@@ -70,6 +70,12 @@ func (ln *Client) PayAndWaitUntilResolution(params ...interface{}) (success bool
 
 	res, err := ln.Call("pay", params...)
 	if err != nil {
+		if cmderr, ok := err.(ErrorCommand); ok {
+			if cmderr.Code == 207 || cmderr.Code == -32602 {
+				return false, res, nil
+			}
+		}
+
 		return ln.WaitPaymentResolution(bolt11)
 	}
 
