@@ -84,10 +84,14 @@ func (ln *Client) PayAndWaitUntilResolution(params ...interface{}) (success bool
 
 // this function blocks
 func (ln *Client) WaitPaymentResolution(bolt11 string) (success bool, payment gjson.Result, err error) {
-	return ln.waitPaymentResolution(bolt11, 1)
+	return ln.waitPaymentResolution(bolt11, 1, true)
 }
 
-func (ln *Client) waitPaymentResolution(bolt11 string, attempt int) (success bool, payment gjson.Result, err error) {
+func (ln *Client) waitPaymentResolution(
+	bolt11 string,
+	attempt int,
+	doubleCheckFailed bool,
+) (success bool, payment gjson.Result, err error) {
 	if attempt > WaitPaymentMaxAttempts {
 		return false, payment, errors.New("max payment confirmation attempts reached.")
 	}
@@ -104,9 +108,17 @@ func (ln *Client) waitPaymentResolution(bolt11 string, attempt int) (success boo
 		case "complete":
 			return true, payment, nil
 		case "failed":
-			return false, payment, nil
+			if doubleCheckFailed {
+				// wait a little and try again, we can't be sure it has really failed
+				// because https://github.com/ElementsProject/lightning/issues/2521
+				time.Sleep(time.Minute * 10)
+				return ln.waitPaymentResolution(bolt11, attempt, false)
+			} else {
+				// ok, we won't double check again because we have already
+				return false, payment, nil
+			}
 		case "pending":
-			return ln.waitPaymentResolution(bolt11, attempt+1)
+			return ln.waitPaymentResolution(bolt11, attempt+1, true)
 		default:
 			return false, payment,
 				errors.New("payment in a weird state: " + payment.Get("status").String())
