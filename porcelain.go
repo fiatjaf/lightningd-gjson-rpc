@@ -1,15 +1,14 @@
 package lightning
 
 import (
-	"errors"
 	"log"
-	"math"
 	"time"
 
 	"github.com/tidwall/gjson"
 )
 
 var InvoiceListeningTimeout = time.Minute * 150
+var WaitSendPayTimeout = time.Hour * 24
 var WaitPaymentMaxAttempts = 60
 
 type Client struct {
@@ -18,6 +17,10 @@ type Client struct {
 	LastInvoiceIndex int
 }
 
+// ListenForInvoices starts a goroutine that will repeatedly call waitanyinvoice.
+// Each payment received will be fed into the client.PaymentHandler function.
+// You can change that function in the meantime.
+// Or you can set it to nil if you want to stop listening for invoices.
 func (ln *Client) ListenForInvoices() {
 	go func() {
 		for {
@@ -46,84 +49,75 @@ func (ln *Client) ListenForInvoices() {
 	}()
 }
 
-// this function blocks
-// call with the same parameters you would call "pay"
-func (ln *Client) PayAndWaitUntilResolution(params ...interface{}) (success bool, payment gjson.Result, err error) {
-	var bolt11 string
-
-	if params == nil {
-		return false, payment, errors.New("empty call")
-	}
-
-	switch firstparam := params[0].(type) {
-	case map[string]interface{}:
-		if vi, ok := firstparam["bolt11"]; ok {
-			if v, ok := vi.(string); ok {
-				bolt11 = v
-			}
-		}
-	case interface{}:
-		if v, ok := firstparam.(string); ok {
-			bolt11 = v
-		}
-	}
-
-	res, err := ln.Call("pay", params...)
-	if err != nil {
-		if cmderr, ok := err.(ErrorCommand); ok {
-			if cmderr.Code == 207 || cmderr.Code == -32602 {
-				return false, res, nil
-			}
-		}
-
-		return ln.WaitPaymentResolution(bolt11)
-	}
-
-	return true, res, nil
-}
-
-// this function blocks
-func (ln *Client) WaitPaymentResolution(bolt11 string) (success bool, payment gjson.Result, err error) {
-	return ln.waitPaymentResolution(bolt11, 1, true)
-}
-
-func (ln *Client) waitPaymentResolution(
+// PayAndWaitUntilResolution implements its 'pay' logic, querying and retrying routes.
+// It's like the default 'pay' plugin, but it blocks until a final success or failure is achieved.
+// After it returns you can be sure a failed payment will not succeed anymore.
+// Any value in params will be passed to 'getroute' or 'sendpay' or smart defaults will be used.
+func (ln *Client) PayAndWaitUntilResolution(
 	bolt11 string,
-	attempt int,
-	doubleCheckFailed bool,
+	params map[string]interface{},
 ) (success bool, payment gjson.Result, err error) {
-	if attempt > WaitPaymentMaxAttempts {
-		return false, payment, errors.New("max payment confirmation attempts reached.")
-	}
-	time.Sleep(time.Second * time.Duration(int(math.Pow(1.1, float64(attempt)))))
-
-	res, err := ln.Call("listpayments", bolt11)
+	decoded, err := ln.Call("decodepay", bolt11)
 	if err != nil {
-		return false, payment, errors.New("failed to check payment status after the fact: " + err.Error())
+		return false, payment, err
 	}
-	payment = res.Get("payments.0")
 
-	if payment.Exists() {
-		switch payment.Get("status").String() {
-		case "complete":
-			return true, payment, nil
-		case "failed":
-			if doubleCheckFailed {
-				// wait a little and try again, we can't be sure it has really failed
-				// because https://github.com/ElementsProject/lightning/issues/2521
-				time.Sleep(time.Minute * 10)
-				return ln.waitPaymentResolution(bolt11, attempt, false)
-			} else {
-				// ok, we won't double check again because we have already
-				return false, payment, nil
-			}
-		case "pending":
-			return ln.waitPaymentResolution(bolt11, attempt+1, true)
-		default:
-			return false, payment,
-				errors.New("payment in a weird state: " + payment.Get("status").String())
+	hash := decoded.Get("payment_hash").String()
+	payee := decoded.Get("payee").String()
+	msatoshi, ok := params["msatoshi"]
+	if !ok {
+		msatoshi = decoded.Get("msatoshi").Int()
+	}
+	riskfactor, ok := params["riskfactor"]
+	if !ok {
+		riskfactor = 10
+	}
+	label, ok := params["label"]
+	if !ok {
+		label = ""
+	}
+
+	fakePayment := gjson.Parse(`{"payment_hash": "` + hash + `"}`)
+
+	for try := 0; try < 10; try++ {
+		res, err := ln.CallNamed("getroute",
+			"id", payee, "msatoshi", msatoshi, "riskfactor", riskfactor, "fuzzpercent", 0)
+		if err != nil {
+			return false, fakePayment, err
 		}
+
+		route := res.Get("route")
+		if !route.Exists() {
+			continue
+		}
+
+		// ignore returned value here as we'll get it from waitsendpay below
+		_, err = ln.CallNamed("sendpay",
+			"route", route.String(), "payment_hash", hash, "label", label, "bolt11", bolt11,
+		)
+		if err != nil {
+			return false, fakePayment, err
+		}
+
+		// this should wait indefinitely, but 24h is enough
+		res, err = ln.CallWithCustomTimeout(WaitSendPayTimeout, "waitsendpay", hash)
+		if err != nil {
+			return false, fakePayment, err
+		}
+
+		if res.Get("code").Exists() {
+			switch res.Get("code").Int() {
+			case 200, 202, 204:
+				// try again
+				continue
+			default:
+				return false, fakePayment, nil
+			}
+		}
+
+		// payment suceeded
+		return true, res, nil
 	}
 
-	return false, payment, errors.New("payment doesn't exist on `listpayments`")
+	return
 }
