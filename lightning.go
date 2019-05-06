@@ -7,7 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/kr/pretty"
 	"github.com/tidwall/gjson"
 )
 
@@ -74,8 +73,6 @@ gotpayload:
 		Method:  method,
 		Params:  payload,
 	}
-
-	pretty.Log(message)
 
 	return ln.CallMessage(timeout, message)
 }

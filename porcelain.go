@@ -103,6 +103,7 @@ func (ln *Client) PayAndWaitUntilResolution(
 		res, err := ln.CallNamed("getroute",
 			"id", payee,
 			"riskfactor", riskfactor,
+			"cltv", 40,
 			"msatoshi", msatoshi,
 			"fuzzpercent", 0,
 			"exclude", exclude,
