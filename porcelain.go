@@ -53,6 +53,7 @@ func (ln *Client) ListenForInvoices() {
 // It's like the default 'pay' plugin, but it blocks until a final success or failure is achieved.
 // After it returns you can be sure a failed payment will not succeed anymore.
 // Any value in params will be passed to 'getroute' or 'sendpay' or smart defaults will be used.
+// This includes values from the default 'pay' plugin.
 func (ln *Client) PayAndWaitUntilResolution(
 	bolt11 string,
 	params map[string]interface{},
@@ -63,11 +64,18 @@ func (ln *Client) PayAndWaitUntilResolution(
 	}
 
 	hash := decoded.Get("payment_hash").String()
+	exclude := []string{}
 	payee := decoded.Get("payee").String()
-	msatoshi, ok := params["msatoshi"]
-	if !ok {
-		msatoshi = decoded.Get("msatoshi").Int()
+
+	var msatoshi float64
+	if imsatoshi, ok := params["msatoshi"]; ok {
+		if converted, err := toFloat(imsatoshi); err == nil {
+			msatoshi = converted
+		}
+	} else {
+		msatoshi = decoded.Get("msatoshi").Float()
 	}
+
 	riskfactor, ok := params["riskfactor"]
 	if !ok {
 		riskfactor = 10
@@ -77,13 +85,31 @@ func (ln *Client) PayAndWaitUntilResolution(
 		label = ""
 	}
 
-	fakePayment := gjson.Parse(`{"payment_hash": "` + hash + `"}`)
+	maxfeepercent := 0.5
+	if imaxfeepercent, ok := params["maxfeepercent"]; ok {
+		if converted, err := toFloat(imaxfeepercent); err == nil {
+			maxfeepercent = converted
+		}
+	}
+	exemptfee := 5000.0
+	if iexemptfee, ok := params["exemptfee"]; ok {
+		if converted, err := toFloat(iexemptfee); err == nil {
+			exemptfee = converted
+		}
+	}
 
+	fakePayment := gjson.Parse(`{"payment_hash": "` + hash + `"}`)
 	for try := 0; try < 10; try++ {
 		res, err := ln.CallNamed("getroute",
-			"id", payee, "msatoshi", msatoshi, "riskfactor", riskfactor, "fuzzpercent", 0)
+			"id", payee,
+			"riskfactor", riskfactor,
+			"msatoshi", msatoshi,
+			"fuzzpercent", 0,
+			"exclude", exclude,
+		)
 		if err != nil {
-			return false, fakePayment, err
+			// no route or invalid parameters, call it a simple failure
+			return false, fakePayment, nil
 		}
 
 		route := res.Get("route")
@@ -91,32 +117,68 @@ func (ln *Client) PayAndWaitUntilResolution(
 			continue
 		}
 
+		// inspect route, it shouldn't be too expensive
+		if route.Get("0.msatoshi").Float()/msatoshi > (1 + 1/maxfeepercent) {
+			// too expensive, but we'll still accept it if the payment is small
+			if msatoshi > exemptfee {
+				// otherwise try the next route
+				// we force that by excluding a channel
+				exclude = append(exclude, getWorstChannel(route))
+				continue
+			}
+		}
+
 		// ignore returned value here as we'll get it from waitsendpay below
 		_, err = ln.CallNamed("sendpay",
-			"route", route.String(), "payment_hash", hash, "label", label, "bolt11", bolt11,
+			"route", route.Value(), "payment_hash", hash, "label", label, "bolt11", bolt11,
 		)
 		if err != nil {
-			return false, fakePayment, err
+			// the command may return an error and we don't care
+			if _, ok := err.(ErrorCommand); ok {
+				// we don't care because we'll see this in the next call
+			} else {
+				// otherwise it's a different odd error, stop
+				return false, fakePayment, err
+			}
 		}
 
 		// this should wait indefinitely, but 24h is enough
 		res, err = ln.CallWithCustomTimeout(WaitSendPayTimeout, "waitsendpay", hash)
 		if err != nil {
-			return false, fakePayment, err
-		}
-
-		if res.Get("code").Exists() {
-			switch res.Get("code").Int() {
-			case 200, 202, 204:
-				// try again
-				continue
-			default:
-				return false, fakePayment, nil
+			if cmderr, ok := err.(ErrorCommand); ok {
+				if cmderr.Code == 200 || cmderr.Code == 202 || cmderr.Code == 204 {
+					// try again
+					continue
+				}
 			}
+
+			// a different error, call it a complete failure
+			return false, fakePayment, err
 		}
 
 		// payment suceeded
 		return true, res, nil
+	}
+
+	// stopped trying
+	return false, fakePayment, nil
+}
+
+func getWorstChannel(route gjson.Result) (worstChannel string) {
+	var worstFee int64 = 0
+	hops := route.Array()
+	if len(hops) == 1 {
+		return hops[0].Get("channel").String() + "/" + hops[0].Get("direction").String()
+	}
+
+	for i := 0; i+1 < len(hops); i++ {
+		hop := hops[i]
+		next := hops[i+1]
+		fee := hop.Get("msatoshi").Int() - next.Get("msatoshi").Int()
+		if fee > worstFee {
+			worstFee = fee
+			worstChannel = hop.Get("channel").String() + "/" + hop.Get("direction").String()
+		}
 	}
 
 	return
