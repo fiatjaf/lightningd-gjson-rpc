@@ -125,7 +125,7 @@ func (ln *Client) callMessageBytes(
 				errchan <- ErrorJSONDecode{err.Error()}
 				break
 			} else if response.Error.Code != 0 {
-				errchan <- ErrorCommand{response.Error.Message, response.Error.Code}
+				errchan <- ErrorCommand{response.Error.Message, response.Error.Code, response.Error.Data}
 				break
 			}
 			respchan <- response.Result
@@ -159,7 +159,8 @@ type JSONRPCResponse struct {
 	Id      string          `json:"id"`
 	Result  json.RawMessage `json:"result"`
 	Error   struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int         `json:"code"`
+		Message string      `json:"message"`
+		Data    interface{} `json:"data"`
 	} `json:"error"`
 }

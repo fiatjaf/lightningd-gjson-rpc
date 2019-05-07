@@ -57,10 +57,10 @@ func (ln *Client) ListenForInvoices() {
 func (ln *Client) PayAndWaitUntilResolution(
 	bolt11 string,
 	params map[string]interface{},
-) (success bool, payment gjson.Result, err error) {
+) (success bool, payment gjson.Result, tries []Try, err error) {
 	decoded, err := ln.Call("decodepay", bolt11)
 	if err != nil {
-		return false, payment, err
+		return false, payment, tries, err
 	}
 
 	hash := decoded.Get("payment_hash").String()
@@ -99,7 +99,7 @@ func (ln *Client) PayAndWaitUntilResolution(
 	}
 
 	fakePayment := gjson.Parse(`{"payment_hash": "` + hash + `"}`)
-	for try := 0; try < 10; try++ {
+	for try := 0; try < 30; try++ {
 		res, err := ln.CallNamed("getroute",
 			"id", payee,
 			"riskfactor", riskfactor,
@@ -110,7 +110,7 @@ func (ln *Client) PayAndWaitUntilResolution(
 		)
 		if err != nil {
 			// no route or invalid parameters, call it a simple failure
-			return false, fakePayment, nil
+			return false, fakePayment, tries, nil
 		}
 
 		route := res.Get("route")
@@ -139,7 +139,7 @@ func (ln *Client) PayAndWaitUntilResolution(
 				// we don't care because we'll see this in the next call
 			} else {
 				// otherwise it's a different odd error, stop
-				return false, fakePayment, err
+				return false, fakePayment, tries, err
 			}
 		}
 
@@ -147,6 +147,8 @@ func (ln *Client) PayAndWaitUntilResolution(
 		res, err = ln.CallWithCustomTimeout(WaitSendPayTimeout, "waitsendpay", hash)
 		if err != nil {
 			if cmderr, ok := err.(ErrorCommand); ok {
+				tries = append(tries, Try{route.Value(), &cmderr, false})
+
 				if cmderr.Code == 200 || cmderr.Code == 202 || cmderr.Code == 204 {
 					// try again
 					continue
@@ -154,15 +156,16 @@ func (ln *Client) PayAndWaitUntilResolution(
 			}
 
 			// a different error, call it a complete failure
-			return false, fakePayment, err
+			return false, fakePayment, tries, err
 		}
 
 		// payment suceeded
-		return true, res, nil
+		tries = append(tries, Try{route.Value(), nil, true})
+		return true, res, tries, nil
 	}
 
 	// stopped trying
-	return false, fakePayment, nil
+	return false, fakePayment, tries, nil
 }
 
 func getWorstChannel(route gjson.Result) (worstChannel string) {
@@ -183,4 +186,10 @@ func getWorstChannel(route gjson.Result) (worstChannel string) {
 	}
 
 	return
+}
+
+type Try struct {
+	Route   interface{}   `json:"route"`
+	Error   *ErrorCommand `json:"error"`
+	Success bool          `json:"success"`
 }
