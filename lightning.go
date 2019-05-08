@@ -124,7 +124,7 @@ func (ln *Client) callMessageBytes(
 			} else if err != nil {
 				errchan <- ErrorJSONDecode{err.Error()}
 				break
-			} else if response.Error.Code != 0 {
+			} else if response.Error != nil && response.Error.Code != 0 {
 				errchan <- ErrorCommand{response.Error.Message, response.Error.Code, response.Error.Data}
 				break
 			}
@@ -149,18 +149,20 @@ const version = "2.0"
 
 type JSONRPCMessage struct {
 	Version string      `json:"jsonrpc"`
-	Id      string      `json:"id"`
+	Id      interface{} `json:"id"`
 	Method  string      `json:"method"`
 	Params  interface{} `json:"params"`
 }
 
 type JSONRPCResponse struct {
 	Version string          `json:"jsonrpc"`
-	Id      string          `json:"id"`
-	Result  json.RawMessage `json:"result"`
-	Error   struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data"`
-	} `json:"error"`
+	Id      interface{}     `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *JSONRPCError   `json:"error,omitempty"`
+}
+
+type JSONRPCError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
 }
