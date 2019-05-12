@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"time"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/tidwall/gjson"
@@ -35,6 +36,8 @@ var waitpaykeys []string = []string{"bolt11", "msatoshi", "riskfactor", "label",
 var waitpaystatuskeys []string = []string{"bolt11"}
 
 func main() {
+	lightning.WaitSendPayTimeout = time.Hour * 240
+
 	var msg lightning.JSONRPCMessage
 
 	incoming := json.NewDecoder(os.Stdin)
