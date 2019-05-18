@@ -10,7 +10,7 @@ import (
 )
 
 var InvoiceListeningTimeout = time.Minute * 150
-var WaitSendPayTimeout = time.Hour * 24
+var WaitSendPayTimeout = time.Hour * 24 * 30
 var WaitPaymentMaxAttempts = 60
 
 type Client struct {
@@ -103,8 +103,8 @@ func (ln *Client) PayAndWaitUntilResolution(
 		}
 	}
 
+	// first try all routehints
 	routehints := decoded.Get("routes").Array()
-
 	if len(routehints) > 0 {
 		for _, rh := range routehints {
 			done, payment := tryPayment(ln, &tries, bolt11,
@@ -114,15 +114,17 @@ func (ln *Client) PayAndWaitUntilResolution(
 				return true, payment, tries, nil
 			}
 		}
-	} else {
-		done, payment := tryPayment(ln, &tries, bolt11,
-			payee, msatoshi, hash, label, &exclude,
-			delayFinalHop, riskfactor, maxfeepercent, exemptfee, nil)
-		if done {
-			return true, payment, tries, nil
-		}
 	}
 
+	// if none of the hints aided, try it without hints
+	done, payment := tryPayment(ln, &tries, bolt11,
+		payee, msatoshi, hash, label, &exclude,
+		delayFinalHop, riskfactor, maxfeepercent, exemptfee, nil)
+	if done {
+		return true, payment, tries, nil
+	}
+
+	// otherwise we failed
 	return false, fakePayment, tries, nil
 }
 
@@ -198,7 +200,7 @@ func tryPayment(
 			}
 		}
 
-		// this should wait indefinitely, but 24h is enough
+		// this should wait indefinitely, but 30d is enough
 		payment, err = ln.CallWithCustomTimeout(WaitSendPayTimeout, "waitsendpay", hash)
 		if err != nil {
 			if cmderr, ok := err.(ErrorCommand); ok {
