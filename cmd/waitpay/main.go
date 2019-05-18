@@ -15,6 +15,10 @@ import (
 var ln *lightning.Client
 var logs = make(map[string][]lightning.Try)
 
+func plog(str string) {
+	log.Print("plugin-webhook " + str)
+}
+
 const manifest = `{
   "options": [],
   "rpcmethods": [
@@ -67,7 +71,7 @@ func main() {
 				irpcfile := conf["rpc-file"]
 				rpc := path.Join(ilnpath.(string), irpcfile.(string))
 				ln = &lightning.Client{Path: rpc}
-				log.Print("initialized waitpay plugin.")
+				plog("initialized waitpay plugin.")
 			case "getmanifest":
 				json.Unmarshal([]byte(manifest), &response.Result)
 			case "waitpay":

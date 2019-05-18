@@ -19,6 +19,10 @@ import (
 var ln *lightning.Client
 var webhookURL string
 
+func plog(str string) {
+	log.Print("plugin-webhook " + str)
+}
+
 const manifest = `{
   "options": [{
     "name": "webhook",
@@ -30,22 +34,20 @@ const manifest = `{
 }`
 
 func paymentHandler(inv gjson.Result) {
-	log.Print("handling payment " + inv.String())
-
 	invv := inv.Value()
 	jinv, err := json.Marshal(invv)
 	if err != nil {
-		log.Print("invalid invoice gotten from lightningd: " + inv.String())
+		plog("invalid invoice gotten from lightningd: " + inv.String())
 		return
 	}
 	req, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jinv))
 	if err != nil {
-		log.Print("failed to send webhook to " + webhookURL + ": " + err.Error())
+		plog("failed to send webhook to " + webhookURL + ": " + err.Error())
 		return
 	}
 	if req.StatusCode >= 300 {
 		b, _ := ioutil.ReadAll(req.Body)
-		log.Print(
+		plog(
 			"webhook handler at " + webhookURL +
 				" returned error (" + strconv.Itoa(req.StatusCode) + "): " + string(b),
 		)
@@ -85,11 +87,11 @@ func main() {
 				if u, ok := options["webhook"]; ok && u != "" {
 					webhookURL = u.(string)
 					if _, err := url.Parse(webhookURL); err != nil {
-						log.Print("invalid URL (" + webhookURL + ") passed to `webhook` option: " + err.Error())
+						plog("invalid URL (" + webhookURL + ") passed to `webhook` option: " + err.Error())
 						return
 					}
 				} else {
-					log.Print("`webhook` option not passed, can't initialize webhook plugin.")
+					plog("`webhook` option not passed, can't initialize webhook plugin.")
 					return
 				}
 
@@ -108,7 +110,7 @@ func main() {
 				// get latest invoice index and start listening from it
 				res, err := ln.Call("listinvoices")
 				if err != nil {
-					log.Print("failed to get last invoice index for webhook plugin: %s" + err.Error())
+					plog("failed to get last invoice index for webhook plugin: %s" + err.Error())
 					return
 				}
 				indexes := res.Get("invoices.#.pay_index").Array()
@@ -122,7 +124,7 @@ func main() {
 				// start listening
 				ln.ListenForInvoices()
 
-				log.Print("initialized webhook plugin. listening from pay_index " +
+				plog("initialized webhook plugin. listening from pay_index " +
 					strconv.Itoa(ln.LastInvoiceIndex) +
 					". sending webhooks to " + webhookURL + ".",
 				)
