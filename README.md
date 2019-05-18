@@ -1,10 +1,12 @@
-Useful and fast interface for [lightningd](https://github.com/ElementsProject/lightning/). All methods return [gjson.Result](https://godoc.org/github.com/tidwall/gjson#Result), which is a good thing (unless your application relies on a lot of information from many different lightningd responses) and you can [learn it in 10 seconds](https://github.com/tidwall/gjson#get-a-value).
+Useful and fast interface for [lightningd](https://github.com/ElementsProject/lightning/). All methods return `[gjson.Result](https://godoc.org/github.com/tidwall/gjson#Result)`, which is a good thing (unless your application relies on a lot of information from many different lightningd responses) and you can [learn it in 10 seconds](https://github.com/tidwall/gjson#get-a-value).
+
+Since RPC calls are just relayed and wrapped, you can use **lightningd-gjson-rpc** to call [custom RPC methods](https://lightning.readthedocs.io/PLUGINS.html) if your node has a plugin enabled on it.
 
 [![godoc.org](https://img.shields.io/badge/reference-godoc-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc)
 
-This is a simple and resistant client. It comes with a practical **invoice listener** method and nice (could be nicer?) defaults for retrying and connecting to faulty lightningd nodes.
+This is a simple and resistant client. It is made to survive against faulty **lightning** node interruptions.
 
-### Usage
+## Usage
 
 ```go
 package main
@@ -69,3 +71,12 @@ ln.CallNamed("invoice",
     "expiry", 3600,
 )
 ```
+
+## Special methods
+
+Besides providing full access to the c-lightning RPC interface with `.Call` methods, we also have [ListenForInvoices](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.ListenForInvoices) and [PayAndWaitUntilResolution](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.PayAndWaitUntilResolution) for making your life better.
+
+
+### Plugins
+
+We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [releases/](releases/).
