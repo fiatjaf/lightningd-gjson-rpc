@@ -72,65 +72,63 @@ func main() {
 		}
 
 		if err != nil {
-			response.Error = &lightning.JSONRPCError{
-				Code:    -1,
-				Message: "Failed to decode request: '" + err.Error() + "'.",
-			}
-		} else {
-			switch msg.Method {
-			case "init":
-				init := msg.Params.(map[string]interface{})
+			plog("failed to decode request, killing: " + err.Error())
+			return
+		}
 
-				// get webhook URL
-				ioptions := init["options"]
-				options := ioptions.(map[string]interface{})
-				if u, ok := options["webhook"]; ok && u != "" {
-					webhookURL = u.(string)
-					if _, err := url.Parse(webhookURL); err != nil {
-						plog("invalid URL (" + webhookURL + ") passed to `webhook` option: " + err.Error())
-						return
-					}
-				} else {
-					plog("`webhook` option not passed, can't initialize webhook plugin.")
+		switch msg.Method {
+		case "init":
+			init := msg.Params.(map[string]interface{})
+
+			// get webhook URL
+			ioptions := init["options"]
+			options := ioptions.(map[string]interface{})
+			if u, ok := options["webhook"]; ok && u != "" {
+				webhookURL = u.(string)
+				if _, err := url.Parse(webhookURL); err != nil {
+					plog("invalid URL (" + webhookURL + ") passed to `webhook` option: " + err.Error())
 					return
 				}
-
-				// init client
-				iconf := init["configuration"]
-				conf := iconf.(map[string]interface{})
-				ilnpath := conf["lightning-dir"]
-				irpcfile := conf["rpc-file"]
-				rpc := path.Join(ilnpath.(string), irpcfile.(string))
-				ln = &lightning.Client{
-					Path:             rpc,
-					LastInvoiceIndex: 0,
-					PaymentHandler:   paymentHandler,
-				}
-
-				// get latest invoice index and start listening from it
-				res, err := ln.Call("listinvoices")
-				if err != nil {
-					plog("failed to get last invoice index for webhook plugin: %s" + err.Error())
-					return
-				}
-				indexes := res.Get("invoices.#.pay_index").Array()
-				for _, indexr := range indexes {
-					index := int(indexr.Int())
-					if index > ln.LastInvoiceIndex {
-						ln.LastInvoiceIndex = index
-					}
-				}
-
-				// start listening
-				ln.ListenForInvoices()
-
-				plog("initialized webhook plugin. listening from pay_index " +
-					strconv.Itoa(ln.LastInvoiceIndex) +
-					". sending webhooks to " + webhookURL + ".",
-				)
-			case "getmanifest":
-				json.Unmarshal([]byte(manifest), &response.Result)
+			} else {
+				plog("`webhook` option not passed, can't initialize webhook plugin.")
+				return
 			}
+
+			// init client
+			iconf := init["configuration"]
+			conf := iconf.(map[string]interface{})
+			ilnpath := conf["lightning-dir"]
+			irpcfile := conf["rpc-file"]
+			rpc := path.Join(ilnpath.(string), irpcfile.(string))
+			ln = &lightning.Client{
+				Path:             rpc,
+				LastInvoiceIndex: 0,
+				PaymentHandler:   paymentHandler,
+			}
+
+			// get latest invoice index and start listening from it
+			res, err := ln.Call("listinvoices")
+			if err != nil {
+				plog("failed to get last invoice index for webhook plugin: %s" + err.Error())
+				return
+			}
+			indexes := res.Get("invoices.#.pay_index").Array()
+			for _, indexr := range indexes {
+				index := int(indexr.Int())
+				if index > ln.LastInvoiceIndex {
+					ln.LastInvoiceIndex = index
+				}
+			}
+
+			// start listening
+			ln.ListenForInvoices()
+
+			plog("initialized webhook plugin. listening from pay_index " +
+				strconv.Itoa(ln.LastInvoiceIndex) +
+				". sending webhooks to " + webhookURL + ".",
+			)
+		case "getmanifest":
+			json.Unmarshal([]byte(manifest), &response.Result)
 		}
 
 		outgoing.Encode(response)
