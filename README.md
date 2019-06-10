@@ -76,7 +76,12 @@ ln.CallNamed("invoice",
 
 Besides providing full access to the c-lightning RPC interface with `.Call` methods, we also have [ListenForInvoices](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.ListenForInvoices) and [PayAndWaitUntilResolution](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.PayAndWaitUntilResolution) for making your life better.
 
+It's good to say also that since we don't have hardcoded methods here you can call [custom RPC methods](https://lightning.readthedocs.io/PLUGINS.html#json-rpc-passthrough) with this library.
 
 ### Plugins
 
 We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [releases/](releases/).
+
+### Who's using this?
+
+Besides our own plugins listed in the link above, there's also [@lntxbot](https://t.me/lntxbot), the Telegram Lightning wallet; [Sparko](https://github.com/fiatjaf/sparko), our better and cheaper alternative to Spark wallet; and [Etleneum](https://etleneum.com/), the centralized smart contract platform.
