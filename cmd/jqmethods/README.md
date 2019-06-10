@@ -1,6 +1,6 @@
 ## The `jqmethods` plugin.
 
-This plugin provides an easy way to call read-only methods that take output from lightningd and postprocess them with [jq](https://stedolan.github.io/jq/). You know, raw `lightning-cli` output can be a little overwhelming sometimes and we end up not finding the stuff we want formatted the way we need at all times. It's also a bad idea to write complex `jq` expressions every time you need to know what is the percentage of empty channels you have or what's the average channel size of the entire network you can see, I'm just making up these examples.
+This plugin provides an easy way to call _read-only_ methods that take output from lightningd and postprocess them with [jq](https://stedolan.github.io/jq/). You know, raw `lightning-cli` output can be a little overwhelming sometimes and we end up not finding the stuff we want formatted the way we need at all times. It's also a bad idea to write complex `jq` expressions every time you need to know what is the percentage of empty channels you have or what's the average channel size of the entire network you can see, I'm just making up these examples.
 
 What we call a _jq method_ is a combination of one or more lightningd RPC calls with a `jq` expression that takes that data and postprocesses it.
 
@@ -52,3 +52,7 @@ lightning-cli jq channel_balance_status
 Calling just `jq` will list all available methods.  Calling `jq-refresh` will refresh the set of available methods without having to reload `lightningd`.
 
 Calling `jq-refresh` will reload the set of available methods from the same source without you having to restart lightningd.
+
+## Methods currently available automatically
+
+[![](https://raw.githubusercontent.com/fiatjaf/jqmethods/master/methods.png)](https://github.com/fiatjaf/jqmethods)
