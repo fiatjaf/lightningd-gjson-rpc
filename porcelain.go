@@ -143,7 +143,7 @@ func tryPayment(
 	exemptfee float64,
 	hint *gjson.Result,
 ) (paid bool, payment gjson.Result) {
-	for try := 0; try < 30; try++ {
+	for try := 0; try < 40; try++ {
 		target := payee
 		if hint != nil {
 			target = hint.Get("0.pubkey").String()
