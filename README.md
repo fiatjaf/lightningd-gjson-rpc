@@ -4,7 +4,7 @@ Since RPC calls are just relayed and wrapped, you can use **lightningd-gjson-rpc
 
 [![godoc.org](https://img.shields.io/badge/reference-godoc-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc)
 
-This is a simple and resistant client. It is made to survive against faulty **lightning** node interruptions.
+This is a simple and resistant client. It is made to survive against faulty **lightning** node interruptions. It can also talk to [spark](https://github.com/shesek/spark-wallet)/[sparko](https://github.com/fiatjaf/sparko) HTTP-RPC using the same API, so you can run your app and your node on different machines.
 
 ## Usage
 
@@ -84,4 +84,4 @@ We have a collection of plugins that expose or use our special methods. Read mor
 
 ### Who's using this?
 
-Besides our own plugins listed in the link above, there's also [@lntxbot](https://t.me/lntxbot), the Telegram Lightning wallet; [Sparko](https://github.com/fiatjaf/sparko), our better and cheaper alternative to Spark wallet; and [Etleneum](https://etleneum.com/), the centralized smart contract platform.
+Besides our own plugins listed in the link above, there's also [@lntxbot](https://t.me/lntxbot), the Telegram Lightning wallet; [Sparko](https://github.com/fiatjaf/sparko), our better and cheaper alternative to Spark wallet; [Etleneum](https://etleneum.com/), the centralized smart contract platform; and [Lightning Charger](https://charger.alhur.es/), the lnurl-powered BTC-to-Lightning mobile wallet helper.

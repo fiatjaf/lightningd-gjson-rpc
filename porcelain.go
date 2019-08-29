@@ -13,12 +13,6 @@ var InvoiceListeningTimeout = time.Minute * 150
 var WaitSendPayTimeout = time.Hour * 24 * 30
 var WaitPaymentMaxAttempts = 60
 
-type Client struct {
-	Path             string
-	PaymentHandler   func(gjson.Result)
-	LastInvoiceIndex int
-}
-
 // ListenForInvoices starts a goroutine that will repeatedly call waitanyinvoice.
 // Each payment received will be fed into the client.PaymentHandler function.
 // You can change that function in the meantime.

@@ -3,8 +3,6 @@ package lightning
 import (
 	"encoding/json"
 	"errors"
-	"io"
-	"net"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -91,57 +89,15 @@ func (ln *Client) CallMessageRaw(timeout time.Duration, message JSONRPCMessage) 
 		message.Params = make([]string, 0)
 	}
 	mbytes, _ := json.Marshal(message)
-	return ln.callMessageBytes(timeout, 0, mbytes)
-}
 
-func (ln *Client) callMessageBytes(
-	timeout time.Duration,
-	retrySequence int,
-	message []byte,
-) (res []byte, err error) {
-	conn, err := net.Dial("unix", ln.Path)
-	if err != nil {
-		if retrySequence < 6 {
-			time.Sleep(time.Second * 2 * (time.Duration(retrySequence) + 1))
-			return ln.callMessageBytes(timeout, retrySequence+1, message)
-		} else {
-			err = ErrorConnect{ln.Path, err.Error()}
-			return
-		}
-	}
-	defer conn.Close()
-
-	respchan := make(chan []byte)
-	errchan := make(chan error)
-	go func() {
-		decoder := json.NewDecoder(conn)
-		for {
-			var response JSONRPCResponse
-			err := decoder.Decode(&response)
-			if err == io.EOF {
-				errchan <- ErrorConnectionBroken{}
-				break
-			} else if err != nil {
-				errchan <- ErrorJSONDecode{err.Error()}
-				break
-			} else if response.Error != nil && response.Error.Code != 0 {
-				errchan <- ErrorCommand{response.Error.Message, response.Error.Code, response.Error.Data}
-				break
-			}
-			respchan <- response.Result
-		}
-	}()
-
-	conn.Write(message)
-
-	select {
-	case v := <-respchan:
-		return v, nil
-	case err = <-errchan:
-		return
-	case <-time.After(timeout):
-		err = ErrorTimeout{int(timeout.Seconds())}
-		return
+	if ln.Path != "" {
+		// it's a socket client
+		return ln.callMessageBytes(timeout, 0, mbytes)
+	} else if ln.SparkURL != "" {
+		// it's a spark client
+		return ln.callSpark(timeout, mbytes)
+	} else {
+		return nil, errors.New("misconfigured client: missing Path or SparkURL.")
 	}
 }
 

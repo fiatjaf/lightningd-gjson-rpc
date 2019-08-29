@@ -7,6 +7,11 @@ type ErrorConnect struct {
 	Message string `json:"message"`
 }
 
+type ErrorNetwork struct {
+	URL     string `json:"url"`
+	Message string `json:"message"`
+}
+
 type ErrorCommand struct {
 	Message string      `json:"msg"`
 	Code    int         `json:"code"`
