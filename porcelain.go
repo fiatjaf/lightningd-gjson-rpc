@@ -54,7 +54,12 @@ func (ln *Client) PayAndWaitUntilResolution(
 	bolt11 string,
 	params map[string]interface{},
 ) (success bool, payment gjson.Result, tries []Try, err error) {
-	decoded, err := ln.Call("decodepay", bolt11)
+	decodeparams := map[string]interface{}{"bolt11": bolt11}
+	if description_as_hash, ok := params["description"]; ok {
+		decodeparams["description"] = description_as_hash
+	}
+
+	decoded, err := ln.Call("decodepay", decodeparams)
 	if err != nil {
 		return false, payment, tries, err
 	}

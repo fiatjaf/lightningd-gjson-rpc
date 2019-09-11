@@ -4,7 +4,7 @@ This plugin sends a webhook to any URL when a new payment is received by your no
 
 ## How to install
 
-This is a single binary for your delight (currently linux/amd64, or you can compile it yourself with `go get`, or ask me for binaries for other systems if you need them).
+This is distributed as a single binary for your delight (or you can compile it yourself with `go get`, or ask me for binaries for other systems if you need them).
 
 [Download it](https://github.com/fiatjaf/lightningd-gjson-rpc/releases) and put it inside the `plugins/` directory of `lightning` folder (or `/usr/local/libexec/c-lightning/plugins/`, I guess, if installed with `sudo make install`) or start lightningd with `--plugin=/path/to/webhook`.
 
