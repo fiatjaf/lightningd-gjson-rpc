@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/fiatjaf/go-lnurl"
 	"github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
@@ -167,6 +170,65 @@ func main() {
 					"status":              "OK",
 					"waiting_for_channel": true,
 				})
+			case lnurl.LNURLLoginParams:
+				// sign k1 with linkingKey and send it along with key
+				k1, err := hex.DecodeString(lnurlparams.K1)
+				if err == nil && len(k1) != 32 {
+					err = errors.New("Invalid length k1.")
+				}
+				if err != nil {
+					response.Error = &lightning.JSONRPCError{
+						Code:    407,
+						Message: err.Error(),
+					}
+					goto end
+				}
+
+				// parse callback url
+				u, err := url.Parse(lnurlparams.Callback)
+				if err != nil {
+					response.Error = &lightning.JSONRPCError{
+						Code:    202,
+						Message: err.Error(),
+					}
+					goto end
+				}
+
+				// get linking key for callback domain
+				sk, err := getLinkingKey(u.Host)
+				if err != nil {
+					response.Error = &lightning.JSONRPCError{
+						Code:    508,
+						Message: err.Error(),
+					}
+					goto end
+				}
+
+				// sign
+				sig, err := sk.Sign(k1)
+				if err != nil {
+					response.Error = &lightning.JSONRPCError{
+						Code:    509,
+						Message: err.Error(),
+					}
+					goto end
+				}
+
+				// call callback with signature and key
+				signature := hex.EncodeToString(sig.Serialize())
+				pubkey := hex.EncodeToString(sk.PubKey().SerializeCompressed())
+				qs := u.Query()
+				qs.Set("sig", signature)
+				qs.Set("key", pubkey)
+				u.RawQuery = qs.Encode()
+
+				callCallback(u, &response, map[string]interface{}{
+					"status":     "OK",
+					"login":      true,
+					"domain":     u.Host,
+					"public_key": pubkey,
+					"signature":  signature,
+				})
 			case lnurl.LNURLWithdrawResponse:
 				// amount and description should be taken either from CLI params
 				// or from interactive input.
@@ -236,6 +298,16 @@ func main() {
 				qs := u.Query()
 				qs.Set("k1", lnurlparams.K1)
 				qs.Set("pr", bolt11)
+
+				// only if there's a valid k1, sign it too
+				if k1, err := hex.DecodeString(lnurlparams.K1); err == nil {
+					if sk, err := getLinkingKey(u.Host); err == nil {
+						if sig, err := sk.Sign(k1); err == nil {
+							qs.Set("sig", hex.EncodeToString(sig.Serialize()))
+						}
+					}
+				} // otherwise ignore.
+
 				u.RawQuery = qs.Encode()
 
 				callCallback(u, &response, map[string]interface{}{
@@ -244,7 +316,6 @@ func main() {
 					"bolt11":              bolt11,
 					"label":               label,
 				})
-			case lnurl.LNURLLoginParams:
 			case lnurl.LNURLPayResponse:
 			}
 		}
@@ -305,4 +376,8 @@ func callCallback(
 
 	j, _ := json.Marshal(jsonresponsesuccess)
 	json.Unmarshal(j, &response.Result)
+}
+
+func getLinkingKey(domain string) (sk *btcec.PrivateKey, err error) {
+	return ln.GetCustomKey(138, domain)
 }
