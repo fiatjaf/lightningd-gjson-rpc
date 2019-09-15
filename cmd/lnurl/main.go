@@ -28,6 +28,11 @@ var manifest = `{
   "options": [],
   "rpcmethods": [
     {
+      "name": "lnurlparams",
+      "usage": "lnurl",
+      "description": "{lnurl} is the bech32-encoded URL to query."
+    },
+    {
       "name": "lnurl",
       "usage": "` + usage + `",
       "description": "{lnurl} is the bech32-encoded URL to query. {private} is either true or false, used on lnurl-channel for the type of channel (defaults to false). {description} is used on lnurl-withdraw (defaults to the default description). {msatoshi} is an integer, used on lnurl-withdraw and lnurl-pay (defaults to maximum possible amount)."
@@ -68,6 +73,27 @@ func main() {
 			plog("initialized lnurl plugin.")
 		case "getmanifest":
 			json.Unmarshal([]byte(manifest), &response.Result)
+		case "lnurlparams":
+			params, err := plugin.GetParams(msg, "lnurl")
+			if err != nil {
+				response.Error = &lightning.JSONRPCError{
+					Code:    400,
+					Message: err.Error(),
+				}
+				goto end
+			}
+
+			data, err := lnurl.HandleLNURL(params["lnurl"].(string))
+			if err != nil {
+				response.Error = &lightning.JSONRPCError{
+					Code:    401,
+					Message: err.Error(),
+				}
+				goto end
+			}
+
+			j, _ := json.Marshal(data)
+			json.Unmarshal(j, &response.Result)
 		case "lnurl":
 			params, err := plugin.GetParams(msg, usage)
 			if err != nil {
