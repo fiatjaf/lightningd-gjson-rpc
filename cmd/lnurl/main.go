@@ -31,14 +31,19 @@ var manifest = `{
   "options": [],
   "rpcmethods": [
     {
+      "name": "lnurlencode",
+      "usage": "url",
+      "description": "Will encode an URL as bech32 with the 'lnurl' prefix. A small helper for servers that want to implement the server-side of the lnurl flow. {lnurl} is the bech32-encoded URL to query."
+    },
+    {
       "name": "lnurlparams",
       "usage": "lnurl",
-      "description": "{lnurl} is the bech32-encoded URL to query."
+      "description": "Will fetch the params from the server or (when the decoded URL has a 'login' querystring) get then from the querystring, then return these params as JSON. {lnurl} is the bech32-encoded URL to query."
     },
     {
       "name": "lnurl",
       "usage": "` + usage + `",
-      "description": "{lnurl} is the bech32-encoded URL to query. {private} is either true or false, used on lnurl-channel for the type of channel (defaults to false). {description} is used on lnurl-withdraw (defaults to the default description). {msatoshi} is an integer, used on lnurl-withdraw and lnurl-pay (defaults to maximum possible amount)."
+      "description": "Will decode the lnurl, get its params (as in 'lnurlparams') and proceed with the lnurl flow according to the tag (login, withdraw etc.). {lnurl} is the bech32-encoded URL to query. {private} is either true or false, used on lnurl-channel for the type of channel (defaults to false). {description} is used on lnurl-withdraw (defaults to the default description). {msatoshi} is an integer, used on lnurl-withdraw and lnurl-pay (defaults to maximum possible amount)."
     }
   ],
   "subscriptions": []
@@ -76,6 +81,27 @@ func main() {
 			plog("initialized lnurl plugin.")
 		case "getmanifest":
 			json.Unmarshal([]byte(manifest), &response.Result)
+		case "lnurlencode":
+			params, err := plugin.GetParams(msg, "url")
+			if err != nil {
+				response.Error = &lightning.JSONRPCError{
+					Code:    400,
+					Message: err.Error(),
+				}
+				goto end
+			}
+
+			url, _ := params["url"].(string)
+			encodedlnurl, err := lnurl.LNURLEncode(url)
+			if err != nil {
+				response.Error = &lightning.JSONRPCError{
+					Code:    500,
+					Message: err.Error(),
+				}
+				goto end
+			}
+
+			json.Unmarshal([]byte(`{"lnurl": "`+encodedlnurl+`"}`), &response.Result)
 		case "lnurlparams":
 			params, err := plugin.GetParams(msg, "lnurl")
 			if err != nil {
@@ -145,7 +171,7 @@ func main() {
 				respinfo, err := ln.Call("getinfo")
 				if err != nil {
 					response.Error = &lightning.JSONRPCError{
-						Code:    500,
+						Code:    501,
 						Message: err.Error(),
 					}
 					goto end
