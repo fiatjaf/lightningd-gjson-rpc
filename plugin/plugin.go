@@ -39,7 +39,7 @@ type RPCMethod struct {
 	Handler         RPCHandler `json:"-"`
 }
 
-type RPCHandler func(p *Plugin, params map[string]interface{}) (resp interface{}, errCode int, err error)
+type RPCHandler func(p *Plugin, params Params) (resp interface{}, errCode int, err error)
 
 func (p *Plugin) Run() {
 	rpcmethodmap := make(map[string]RPCMethod, len(p.RPCMethods))
@@ -139,7 +139,9 @@ func (p *Plugin) Run() {
 	}
 }
 
-func GetParams(msg lightning.JSONRPCMessage, usage string) (params map[string]interface{}, err error) {
+type Params map[string]interface{}
+
+func GetParams(msg lightning.JSONRPCMessage, usage string) (params Params, err error) {
 	keys := strings.Split(usage, " ")
 	requiredness := make([]bool, len(keys))
 
