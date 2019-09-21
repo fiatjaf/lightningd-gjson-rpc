@@ -3,134 +3,99 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"path"
 	"strconv"
+	"strings"
 
-	"github.com/fiatjaf/lightningd-gjson-rpc"
-	"github.com/tidwall/gjson"
+	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 )
 
-var ln *lightning.Client
-var webhookURL string
+func main() {
+	p := plugin.Plugin{
+		Name: "webhook",
+		Options: []plugin.Option{
+			{
+				Name:        "webhook",
+				Type:        "string",
+				Description: "The URL to which we will send notifications. Multiple URLs can be passed separated by commas. To filter notification by either {invoice|payment|forward}, pass the URL with a query string like https://url.com/?filter-event=payment",
+			},
+		},
+		Subscriptions: []plugin.Subscription{
+			{
+				"invoice_payment",
+				func(p *plugin.Plugin, params plugin.Params) {
+					payload := params["invoice_payment"]
+					for _, url := range getURLs(p.Args["webhook"].(string), "invoice") {
+						dispatchWebhook(p, url, payload)
+					}
+				},
+			},
+			{
+				"sendpay_success",
+				func(p *plugin.Plugin, params plugin.Params) {
+					payload := params["sendpay_success"]
+					for _, url := range getURLs(p.Args["webhook"].(string), "payment") {
+						dispatchWebhook(p, url, payload)
+					}
+				},
+			},
+			{
+				"forward_event",
+				func(p *plugin.Plugin, params plugin.Params) {
+					payload := params["forward_event"]
+					for _, url := range getURLs(p.Args["webhook"].(string), "forward") {
+						dispatchWebhook(p, url, payload)
+					}
+				},
+			},
+		},
+		Dynamic: true,
+	}
 
-func plog(str string) {
-	log.Print("plugin-webhook " + str)
+	p.Run()
 }
 
-const manifest = `{
-  "options": [{
-    "name": "webhook",
-    "type": "string",
-    "description": "To which URL should we send incoming payment notifications?"
-  }],
-  "rpcmethods": [],
-  "subscriptions": []
-}`
+func getURLs(optvalue string, kind string) (urls []string) {
+	for _, entry := range strings.Split(optvalue, ",") {
+		entry := strings.TrimSpace(entry)
+		u, err := url.Parse(entry)
+		if err != nil {
+			continue
+		}
 
-func paymentHandler(inv gjson.Result) {
-	invv := inv.Value()
-	jinv, err := json.Marshal(invv)
+		if evs, ok := u.Query()["filter-event"]; ok {
+			for _, ev := range evs {
+				if ev == kind {
+					urls = append(urls, entry)
+				}
+			}
+		} else {
+			urls = append(urls, entry)
+		}
+	}
+	return
+}
+
+func dispatchWebhook(p *plugin.Plugin, url string, payload interface{}) {
+	j, err := json.Marshal(payload)
 	if err != nil {
-		plog("invalid invoice gotten from lightningd: " + inv.String())
+		p.Log("failed to encode json payload: " + err.Error())
 		return
 	}
-	req, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jinv))
+
+	req, err := http.Post(url, "application/json", bytes.NewBuffer(j))
 	if err != nil {
-		plog("failed to send webhook to " + webhookURL + ": " + err.Error())
+		p.Log("failed to send webhook to " + url + ": " + err.Error())
 		return
 	}
 	if req.StatusCode >= 300 {
 		b, _ := ioutil.ReadAll(req.Body)
-		plog(
-			"webhook handler at " + webhookURL +
+		p.Log(
+			"webhook handler at " + url +
 				" returned error (" + strconv.Itoa(req.StatusCode) + "): " + string(b),
 		)
 		return
-	}
-}
-
-func main() {
-	var msg lightning.JSONRPCMessage
-
-	incoming := json.NewDecoder(os.Stdin)
-	outgoing := json.NewEncoder(os.Stdout)
-	for {
-		err := incoming.Decode(&msg)
-		if err == io.EOF {
-			return
-		}
-
-		response := lightning.JSONRPCResponse{
-			Version: msg.Version,
-			Id:      msg.Id,
-		}
-
-		if err != nil {
-			plog("failed to decode request, killing: " + err.Error())
-			return
-		}
-
-		switch msg.Method {
-		case "init":
-			init := msg.Params.(map[string]interface{})
-
-			// get webhook URL
-			ioptions := init["options"]
-			options := ioptions.(map[string]interface{})
-			if u, ok := options["webhook"]; ok && u != "" {
-				webhookURL = u.(string)
-				if _, err := url.Parse(webhookURL); err != nil {
-					plog("invalid URL (" + webhookURL + ") passed to `webhook` option: " + err.Error())
-					return
-				}
-			} else {
-				plog("`webhook` option not passed, can't initialize webhook plugin.")
-				return
-			}
-
-			// init client
-			iconf := init["configuration"]
-			conf := iconf.(map[string]interface{})
-			ilnpath := conf["lightning-dir"]
-			irpcfile := conf["rpc-file"]
-			rpc := path.Join(ilnpath.(string), irpcfile.(string))
-			ln = &lightning.Client{
-				Path:             rpc,
-				LastInvoiceIndex: 0,
-				PaymentHandler:   paymentHandler,
-			}
-
-			// get latest invoice index and start listening from it
-			res, err := ln.Call("listinvoices")
-			if err != nil {
-				plog("failed to get last invoice index for webhook plugin: %s" + err.Error())
-				return
-			}
-			indexes := res.Get("invoices.#.pay_index").Array()
-			for _, indexr := range indexes {
-				index := int(indexr.Int())
-				if index > ln.LastInvoiceIndex {
-					ln.LastInvoiceIndex = index
-				}
-			}
-
-			// start listening
-			ln.ListenForInvoices()
-
-			plog("initialized webhook plugin. listening from pay_index " +
-				strconv.Itoa(ln.LastInvoiceIndex) +
-				". sending webhooks to " + webhookURL + ".",
-			)
-		case "getmanifest":
-			json.Unmarshal([]byte(manifest), &response.Result)
-		}
-
-		outgoing.Encode(response)
 	}
 }
