@@ -16,10 +16,10 @@ func main() {
 		RPCMethods: []plugin.RPCMethod{
 			{
 				Name:            "sign",
-				Usage:           "message",
-				Description:     "Signs a string {message} with the node's public key.",
+				Usage:           "message [compact]",
+				Description:     "Signs a string {message} with the node's public key. {compact} defaults to false, but if true then the produced signature will be compact and allow for public key recover later.",
 				LongDescription: `If {message} is a valid 32-byte hex-encoded string, it will be signed as it is, otherwise it will be hashed with sha256 first. The response will include a hex-encoded "signature" and a boolean "hashed" indicating if the given message was hashed before signing.`,
-				Handler: func(p *plugin.Plugin, params map[string]interface{}) (resp interface{}, errCode int, err error) {
+				Handler: func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
 					sk, err := p.Client.GetPrivateKey()
 					if err != nil {
 						errCode = 2
@@ -28,14 +28,22 @@ func main() {
 
 					hash, wasHashed := getHashedMessage(params)
 
-					signature, err := sk.Sign(hash)
-					if err != nil {
-						errCode = 3
-						return
+					var signature []byte
+					if c, ok := params["compact"]; ok && c.(bool) {
+						signature, err = btcec.SignCompact(btcec.S256(), sk, hash, false)
+						if err != nil {
+							return nil, 3, err
+						}
+					} else {
+						sig, err := sk.Sign(hash)
+						if err != nil {
+							return nil, 3, err
+						}
+						signature = sig.Serialize()
 					}
 
 					return map[string]interface{}{
-						"signature":  hex.EncodeToString(signature.Serialize()),
+						"signature":  hex.EncodeToString(signature),
 						"was_hashed": wasHashed,
 						"hash":       hex.EncodeToString(hash),
 						"pubkey":     hex.EncodeToString(sk.PubKey().SerializeCompressed()),
@@ -47,7 +55,7 @@ func main() {
 				Usage:           "message signature [pubkey]",
 				Description:     "Verifies a string {message} against the given {pubkey}.",
 				LongDescription: "{pubkey} is expected to be 33-byte, hex-encoded, and {signature} also hex-encoded. {message} can be either a 32-byte hex-encoded string or a full string message; in the first case it will be used as it is, in the second it will be first hashed with sha256 and then verified.",
-				Handler: func(p *plugin.Plugin, params map[string]interface{}) (resp interface{}, errCode int, err error) {
+				Handler: func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
 					bsig, err := hex.DecodeString(params["signature"].(string))
 					if err != nil {
 						errCode = 3
