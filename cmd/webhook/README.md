@@ -2,6 +2,8 @@
 
 This plugin sends a webhook to any URL when a payment is received, sent or forwarded. It supports filtering just some of these events and dispatching the webhooks to multiple URLs (each can have its own filtering policies).
 
+The payload for each webhook is the _inner object_ of https://lightning.readthedocs.io/PLUGINS.html#invoice-payment, https://lightning.readthedocs.io/PLUGINS.html#sendpay-success and https://lightning.readthedocs.io/PLUGINS.html#forward-event, depending on the kind of event.
+
 ## How to install
 
 This is distributed as a single binary for your delight (or you can compile it yourself with `go get`).

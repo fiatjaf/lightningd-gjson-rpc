@@ -41,3 +41,11 @@ lightning-cli verify 'vote trump' 3045022100d4e623a6dcb0d9728e612fec8d35bfae18b7
    "was_hashed": true
 }
 ```
+
+### How to make it work like lnd's `SignMessage` and `VerifyMessage`
+
+1. Sign with `compact=true`
+2. When verifying that compact signature, don't pass a public key.
+3. You'll get a public key inferred from the message and signature.
+4. Check that public key against `listnodes` to see if it's from an active node in the network.
+5. Since this flow doesn't make any sense and doesn't account for private nodes in the network, which should be the majority, go ask lnd people what they intended to do with this.
