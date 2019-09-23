@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 
@@ -34,7 +33,7 @@ func main() {
 			{"sparko-host", "string", "127.0.0.1", "http(s) server listen address"},
 			{"sparko-port", "string", "9737", "http(s) server port"},
 			{"sparko-login", "string", nil, "http basic auth login, \"username:password\" format"},
-			{"sparko-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for TLS"},
+			{"sparko-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for TLS (relative to your lightning directory)"},
 			{"sparko-keys", "string", "", "semicolon-separated list of key-permissions pairs"},
 		},
 		Subscriptions: []plugin.Subscription{
@@ -131,36 +130,6 @@ func main() {
 				if !filepath.IsAbs(tlspath) {
 					tlspath = filepath.Join(filepath.Dir(p.Client.Path), tlspath)
 				}
-
-				if exists, err := pathExists(tlspath); err != nil {
-					p.Log("tlspath ", tlspath, " couldn't be read: ", err)
-					os.Exit(-1)
-					return
-				} else if !exists {
-					// dir doesn't exist, create.
-					err := os.MkdirAll(tlspath, os.ModeDir)
-					if err != nil {
-						p.Log("failed to make dir ", tlspath, ": ", err)
-						os.Exit(-1)
-						return
-					}
-				}
-				// now dir exists, check cert.
-				if exists, err := pathExists(filepath.Join(tlspath, "cert.pem")); err != nil {
-					p.Log("certs at ", tlspath, " couldn't be read: ", err)
-					os.Exit(-1)
-					return
-				} else if !exists {
-					// don't have certs. generate.
-					err := generateCert(tlspath)
-					if err != nil {
-						p.Log("failed to generate certificate at ", tlspath, ": ", err)
-						os.Exit(-1)
-						return
-					}
-				}
-
-				// now we have certs!
 				p.Log("HTTPS server on https://" + srv.Addr + "/")
 				listenerr = srv.ListenAndServeTLS(path.Join(tlspath, "cert.pem"), path.Join(tlspath, "key.pem"))
 			} else {

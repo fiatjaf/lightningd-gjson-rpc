@@ -20,3 +20,21 @@ This is distributed as a single binary for your delight (or you can compile it y
 You only need the binary you can get in [the releases page](https://github.com/fiatjaf/lightningd-gjson-rpc/releases), nothing else.
 
 ## How to use
+
+Just configure the options you want in you `~/.lightning/config` file, like the following:
+
+```
+sparko-tls-path=sparko-tls
+sparko-host=0.0.0.0
+sparko-port=9737
+sparko-login=mywalletusername:mywalletpassword
+sparko-keys=secretaccesskeythatcanreadstuff:+listchannels,+listnodes;ultrasecretaccesskeythatcansendandreceive:+invoice,+listinvoices,+delinvoice,+decodepay,+waitpay
+```
+
+To use TLS (`https://`), generate your keys first:
+
+```
+cd ~/.lightning/sparko-tls/
+openssl genrsa -out key.pem 2048
+openssl req -new -x509 -sha256 -key key.pem -out cert.pem -days 3650
+```

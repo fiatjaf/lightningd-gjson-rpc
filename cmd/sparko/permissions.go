@@ -20,7 +20,7 @@ func readPermissionsConfig(configstr string) (Keys, error) {
 			continue
 		}
 
-		key := parts[0]
+		key := strings.TrimSpace(parts[0])
 		perms := parts[1]
 
 		set := PermissionSet{
@@ -28,6 +28,7 @@ func readPermissionsConfig(configstr string) (Keys, error) {
 			Disallow: make(map[string]bool),
 		}
 		for _, methodKey := range strings.Split(perms, ",") {
+			methodKey = strings.TrimSpace(methodKey)
 			methods := []string{methodKey[1:]}
 			if groupmethods, ok := groups[methodKey[1:]]; ok {
 				methods = groupmethods
