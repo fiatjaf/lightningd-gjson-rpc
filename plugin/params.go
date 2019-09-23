@@ -21,6 +21,12 @@ func (params Params) String(key string) (s string, err error) {
 	if !ok {
 		err = errType(key)
 	}
+
+	if s == "null" {
+		err = errType(key)
+		return
+	}
+
 	return
 }
 

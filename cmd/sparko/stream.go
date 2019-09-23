@@ -1,0 +1,69 @@
+package main
+
+import (
+	"io/ioutil"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
+	"github.com/tidwall/gjson"
+	"gopkg.in/antage/eventsource.v1"
+)
+
+type event struct {
+	typ  string
+	data string
+}
+
+func startStreams(p *plugin.Plugin) eventsource.EventSource {
+	id := 1
+
+	es := eventsource.New(
+		eventsource.DefaultSettings(),
+		func(req *http.Request) [][]byte {
+			return [][]byte{
+				[]byte("X-Accel-Buffering: no"),
+				[]byte("Cache-Control: no-cache"),
+				[]byte("Content-Type: text/event-stream"),
+				[]byte("Connection: keep-alive"),
+				[]byte("Access-Control-Allow-Origin: *"),
+			}
+		},
+	)
+
+	ee = make(chan event)
+	go pollRate(p, ee)
+
+	go func() {
+		for {
+			select {
+			case e := <-ee:
+				es.SendEventMessage(e.data, e.typ, strconv.Itoa(id))
+			}
+			id++
+		}
+	}()
+
+	return es
+}
+
+func pollRate(p *plugin.Plugin, ee chan<- event) {
+	defer pollRate(p, ee)
+
+	resp, err := http.Get("https://www.bitstamp.net/api/v2/ticker/btcusd")
+	if err != nil || resp.StatusCode >= 300 {
+		p.Log(resp.StatusCode, " error fetching BTC price: ", err)
+		return
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		p.Log("Error decoding BTC price: ", err)
+		return
+	}
+
+	lastRate := gjson.GetBytes(b, "last").String()
+	ee <- event{typ: "btcusd", data: `"` + lastRate + `"`}
+
+	time.Sleep(time.Minute * 5)
+}

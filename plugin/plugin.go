@@ -26,10 +26,10 @@ type Plugin struct {
 }
 
 type Option struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Default     string `json:"default"`
-	Description string `json:"description"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	Default     interface{} `json:"default"`
+	Description string      `json:"description"`
 }
 
 type RPCMethod struct {
@@ -58,6 +58,19 @@ type RPCHandler func(p *Plugin, params Params) (resp interface{}, errCode int, e
 type NotificationHandler func(p *Plugin, params Params)
 
 func (p *Plugin) Run() {
+	initialized := make(chan bool)
+
+	go func() {
+		<-initialized
+		if p.OnInit != nil {
+			p.OnInit(p)
+		}
+	}()
+
+	p.Listener(initialized)
+}
+
+func (p *Plugin) Listener(initialized chan<- bool) {
 	rpcmethodmap := make(map[string]RPCMethod, len(p.RPCMethods))
 	for _, rpcmethod := range p.RPCMethods {
 		rpcmethodmap[rpcmethod.Name] = rpcmethod
@@ -110,10 +123,7 @@ func (p *Plugin) Run() {
 			p.Args = Params(params["options"].(map[string]interface{}))
 
 			p.Log("initialized plugin.")
-
-			if p.OnInit != nil {
-				go p.OnInit(p)
-			}
+			initialized <- true
 		case "getmanifest":
 			if p.Options == nil {
 				p.Options = make([]Option, 0)
