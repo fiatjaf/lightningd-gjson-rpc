@@ -38,3 +38,13 @@ cd ~/.lightning/sparko-tls/
 openssl genrsa -out key.pem 2048
 openssl req -new -x509 -sha256 -key key.pem -out cert.pem -days 3650
 ```
+
+### Call the HTTP RPC
+
+```
+curl -k https://<sparko-host>:<sparko-port>/rpc -d '{"method": "pay", "params": ["lnbc..."]}' -H 'X-Access: <access-key>'
+```
+
+### Open the wallet UI
+
+Visit `https://<sparko-host>:<sparko-port>/`.
