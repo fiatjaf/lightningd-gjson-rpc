@@ -24,7 +24,7 @@ var login string
 var ee chan event
 var keys Keys
 
-var httpPublic = &assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: ""}
+var httpPublic = &assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "spark-wallet/client/dist/"}
 
 func main() {
 	p := plugin.Plugin{
@@ -97,7 +97,7 @@ func main() {
 				// web ui
 				router.Path("/").Methods("GET").HandlerFunc(
 					func(w http.ResponseWriter, r *http.Request) {
-						indexb, err := Asset("index.html")
+						indexb, err := Asset("spark-wallet/client/dist/index.html")
 						if err != nil {
 							w.WriteHeader(404)
 							return

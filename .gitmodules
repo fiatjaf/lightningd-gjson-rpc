@@ -1,0 +1,3 @@
+[submodule "cmd/sparko/spark-wallet"]
+	path = cmd/sparko/spark-wallet
+	url = git@github.com:shesek/spark-wallet.git
