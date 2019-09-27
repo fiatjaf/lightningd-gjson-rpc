@@ -77,6 +77,7 @@ func main() {
 					p.Log("Error reading permissions config: " + err.Error())
 					return
 				}
+				p.Log("Keys read: " + keys.String())
 			}
 
 			// start eventsource thing

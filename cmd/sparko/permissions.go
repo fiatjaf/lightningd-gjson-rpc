@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -16,13 +17,18 @@ func readPermissionsConfig(configstr string) (Keys, error) {
 
 	for _, keyentry := range strings.Split(configstr, ";") {
 		parts := strings.Split(keyentry, ":")
-		if len(parts) != 2 {
+		key := strings.TrimSpace(parts[0])
+		if len(parts) == 1 {
+			// it has all permissions
+			keys[key] = PermissionSet{}
+			continue
+		}
+		if len(parts) > 2 {
+			// invalid
 			continue
 		}
 
-		key := strings.TrimSpace(parts[0])
 		perms := parts[1]
-
 		set := PermissionSet{
 			Allow:    make(map[string]bool),
 			Disallow: make(map[string]bool),
@@ -49,6 +55,23 @@ func readPermissionsConfig(configstr string) (Keys, error) {
 	}
 
 	return keys, err
+}
+
+func (keys Keys) String() string {
+	out := make([]string, len(keys))
+	i := 0
+	for key, permissions := range keys {
+		listed := "full-access"
+		if len(permissions.Allow) > 0 {
+			listed = fmt.Sprintf("%d whitelisted", len(permissions.Allow))
+		} else if len(permissions.Disallow) > 0 {
+			listed = fmt.Sprintf("%d blacklisted", len(permissions.Disallow))
+		}
+
+		out[i] = key + " (" + listed + ")"
+		i++
+	}
+	return strings.Join(out, ", ")
 }
 
 // predefined groups
