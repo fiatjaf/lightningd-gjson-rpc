@@ -2,6 +2,7 @@ package lightning
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -21,8 +22,9 @@ type Client struct {
 	Path string
 
 	// spark/sparko server
-	SparkURL   string
-	SparkToken string
+	SparkURL              string
+	SparkToken            string
+	DontCheckCertificates bool
 }
 
 // the lowest-level method for a socket client
@@ -79,6 +81,13 @@ func (ln *Client) callMessageBytes(
 
 // the lowest-level method for a spark client
 func (ln *Client) callSpark(timeout time.Duration, body []byte) (res []byte, err error) {
+	client := &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: ln.DontCheckCertificates},
+		},
+	}
+
 	req, err := http.NewRequest("POST", ln.SparkURL, bytes.NewBuffer(body))
 	if err != nil {
 		err = ErrorConnect{ln.SparkURL, err.Error()}
@@ -87,8 +96,8 @@ func (ln *Client) callSpark(timeout time.Duration, body []byte) (res []byte, err
 	if ln.SparkToken != "" {
 		req.Header.Add("X-Access", ln.SparkToken)
 	}
-	http.DefaultClient.Timeout = timeout
-	resp, err := http.DefaultClient.Do(req)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		if strings.Index(err.Error(), "imeout") != -1 {
 			err = ErrorTimeout{int(timeout.Seconds())}
