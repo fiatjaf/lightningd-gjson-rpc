@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -123,6 +124,7 @@ func main() {
 						"client", p.Client,
 					)
 				},
+				TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 			}
 
 			var listenerr error
