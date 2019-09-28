@@ -49,6 +49,8 @@ func startStreams(p *plugin.Plugin) eventsource.EventSource {
 }
 
 func pollRate(p *plugin.Plugin, ee chan<- event) {
+	time.Sleep(time.Minute * 1)
+
 	defer pollRate(p, ee)
 
 	resp, err := http.Get("https://www.bitstamp.net/api/v2/ticker/btcusd")
@@ -65,5 +67,5 @@ func pollRate(p *plugin.Plugin, ee chan<- event) {
 	lastRate := gjson.GetBytes(b, "last").String()
 	ee <- event{typ: "btcusd", data: `"` + lastRate + `"`}
 
-	time.Sleep(time.Minute * 5)
+	time.Sleep(time.Minute * 4)
 }
