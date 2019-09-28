@@ -60,6 +60,10 @@ func main() {
 func getURLs(optvalue string, kind string) (urls []string) {
 	for _, entry := range strings.Split(optvalue, ",") {
 		entry := strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
 		u, err := url.Parse(entry)
 		if err != nil {
 			continue
