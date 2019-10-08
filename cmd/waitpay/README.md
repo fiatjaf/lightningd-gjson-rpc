@@ -4,7 +4,7 @@ Just call and wait until it pays. No more keep trying in the background in an as
 
 Provides two RPC commands:
 
- * `waitpay` command, similar to `pay`, but blocks and only resolves when the payment is either succeeded or failed. The parameters are mostly the same as parameters to `pay`. The return is always a `payment` object like the other returned from `listpayments`, either succeeded or failed, or it can be an error also, in bizarre cases.
+ * `waitpay` command, similar to `pay`, but blocks and only resolves when the payment is either succeeded or failed. The parameters are mostly the same as parameters to `pay`. The return is always a `payment` object like the other returned from `listsendpays`, either succeeded or failed, or it can be an error also, in bizarre cases.
 * `waitpaystatus` command, similar to `paystatus`, but the return value is completely different: just an array of routes tried in the last call for the given `bolt11` invoice.
 
 ## How to install

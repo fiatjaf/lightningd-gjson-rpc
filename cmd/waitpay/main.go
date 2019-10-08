@@ -117,9 +117,9 @@ func main() {
 			if !success {
 				// in this case we fetch the failed payment object from lightningd for consistency
 				var res gjson.Result
-				res, err = ln.Call("listpayments", bolt11)
+				res, err = ln.Call("listsendpays", bolt11)
 				if err != nil {
-					goto listpaymentserr
+					goto listsendpayserr
 				}
 				if res.Get("payments.#").Int() == 0 {
 					goto noteventried
@@ -177,7 +177,7 @@ func main() {
 			Message: "Unexpected error: '" + err.Error() + "'",
 		}
 		goto end
-	listpaymentserr:
+	listsendpayserr:
 		response.Error = &lightning.JSONRPCError{
 			Code:    212,
 			Message: "Payment failed: '" + err.Error() + "'",
