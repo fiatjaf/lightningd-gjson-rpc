@@ -69,6 +69,7 @@ func main() {
 			if login != "" {
 				accessKey = hmacStr(login, "access-key")
 				manifestKey = hmacStr(accessKey, "manifest-key")
+				p.Log("Login credentials read: " + login + "(full-access key: " + accessKey + ")")
 			}
 
 			// permissions
