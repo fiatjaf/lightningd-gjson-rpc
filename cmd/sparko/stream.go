@@ -20,7 +20,11 @@ func startStreams(p *plugin.Plugin) eventsource.EventSource {
 	id := 1
 
 	es := eventsource.New(
-		eventsource.DefaultSettings(),
+		&eventsource.Settings{
+			Timeout:        5 * time.Second,
+			CloseOnTimeout: true,
+			IdleTimeout:    300 * time.Minute,
+		},
 		func(req *http.Request) [][]byte {
 			return [][]byte{
 				[]byte("X-Accel-Buffering: no"),
@@ -34,6 +38,23 @@ func startStreams(p *plugin.Plugin) eventsource.EventSource {
 
 	ee = make(chan event)
 	go pollRate(p, ee)
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		es.SendRetryMessage(3 * time.Second)
+	}()
+
+	go func() {
+		for {
+			time.Sleep(25 * time.Second)
+			if es.ConsumersCount() == 0 {
+				es.Close()
+				return
+			} else {
+				es.SendEventMessage("", "keepalive", "")
+			}
+		}
+	}()
 
 	go func() {
 		for {
