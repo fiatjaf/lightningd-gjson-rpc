@@ -186,7 +186,7 @@ func main() {
 	noteventried:
 		response.Error = &lightning.JSONRPCError{
 			Code:    208,
-			Message: "Payment not even tried: '" + err.Error() + "'",
+			Message: "Payment not even tried",
 		}
 		goto end
 
