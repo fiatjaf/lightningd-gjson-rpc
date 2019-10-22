@@ -41,7 +41,9 @@ func startStreams(p *plugin.Plugin) eventsource.EventSource {
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		es.SendRetryMessage(3 * time.Second)
+		if es.ConsumersCount() > 0 {
+			es.SendRetryMessage(3 * time.Second)
+		}
 	}()
 
 	go func() {
