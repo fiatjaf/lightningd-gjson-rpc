@@ -19,10 +19,10 @@ import (
 
 func main() {
 	p := plugin.Plugin{
-		Name: "fakechannels",
+		Name: "shadows",
 		RPCMethods: []plugin.RPCMethod{
 			{
-				"invoice_fakechannel",
+				"shadow-invoice",
 				"msatoshi id description [expiry]",
 				"Create a fake private channel and an invoice linked to it for {msatoshi} with {description} with optional {expiry} seconds (default 1 week).",
 				"The fake channel id will be generated from {id}. Both the preimage and the invoice label will be generated from the fake channel id plus a secret derived from your master seed.",
@@ -172,7 +172,7 @@ func main() {
 }
 
 func getSecret(p *plugin.Plugin) (secret string, err error) {
-	sk, err := p.Client.GetCustomKey(0, "fakechannels-secret")
+	sk, err := p.Client.GetCustomKey(0, "shadow-secret")
 	if err != nil {
 		return
 	}
