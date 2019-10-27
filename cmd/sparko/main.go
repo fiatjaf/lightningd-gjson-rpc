@@ -2,13 +2,8 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/json"
-	"net"
 	"net/http"
-	"path"
-	"path/filepath"
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/elazarl/go-bindata-assetfs"
@@ -27,15 +22,18 @@ var keys Keys
 
 var httpPublic = &assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "spark-wallet/client/dist/"}
 
+const DEFAULTPORT = "9737"
+
 func main() {
 	p := plugin.Plugin{
 		Name: "sparko",
 		Options: []plugin.Option{
 			{"sparko-host", "string", "127.0.0.1", "http(s) server listen address"},
-			{"sparko-port", "string", "9737", "http(s) server port"},
+			{"sparko-port", "string", DEFAULTPORT, "http(s) server port"},
 			{"sparko-login", "string", nil, "http basic auth login, \"username:password\" format"},
+			{"sparko-keys", "string", nil, "semicolon-separated list of key-permissions pairs"},
 			{"sparko-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for TLS (relative to your lightning directory)"},
-			{"sparko-keys", "string", "", "semicolon-separated list of key-permissions pairs"},
+			{"sparko-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
 		},
 		Subscriptions: []plugin.Subscription{
 			{
@@ -69,7 +67,7 @@ func main() {
 			if login != "" {
 				accessKey = hmacStr(login, "access-key")
 				manifestKey = hmacStr(accessKey, "manifest-key")
-				p.Log("Login credentials read: " + login + "(full-access key: " + accessKey + ")")
+				p.Log("Login credentials read: " + login + " (full-access key: " + accessKey + ")")
 			}
 
 			// permissions
@@ -114,34 +112,7 @@ func main() {
 			}
 
 			// start server
-			host, _ := p.Args.String("sparko-host")
-			port, _ := p.Args.String("sparko-port")
-			srv := &http.Server{
-				Handler: router,
-				Addr:    host + ":" + port,
-				BaseContext: func(_ net.Listener) context.Context {
-					return context.WithValue(
-						context.Background(),
-						"client", p.Client,
-					)
-				},
-				TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
-			}
-
-			var listenerr error
-			if tlspath, err := p.Args.String("sparko-tls-path"); err == nil {
-				// expand tlspath from lightning dir
-				if !filepath.IsAbs(tlspath) {
-					tlspath = filepath.Join(filepath.Dir(p.Client.Path), tlspath)
-				}
-				p.Log("HTTPS server on https://" + srv.Addr + "/")
-				listenerr = srv.ListenAndServeTLS(path.Join(tlspath, "cert.pem"), path.Join(tlspath, "key.pem"))
-			} else {
-				p.Log("HTTP server on http://" + srv.Addr + "/")
-				listenerr = srv.ListenAndServe()
-			}
-
-			p.Log("error listening: ", listenerr)
+			listen(p, router)
 		},
 		Dynamic: true,
 	}

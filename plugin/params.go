@@ -23,6 +23,7 @@ func (params Params) String(key string) (s string, err error) {
 	}
 
 	if s == "null" {
+		s = ""
 		err = errType(key)
 		return
 	}

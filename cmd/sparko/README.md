@@ -53,13 +53,25 @@ sparko-keys=masterkeythatcandoeverything;secretaccesskeythatcanreadstuff:+listch
 2019/09/27 00:48:46 plugin-sparko Keys read: masterkeythatcandoeverything (full-access), secretaccesskeythatcanreadstuff (2 whitelisted), ultrasecretaccesskeythatcansendandreceive (6 whitelisted)
 ```
 
-To use TLS (`https://`), generate your keys first:
+To use TLS with a self-signed certificate (`https://`), generate your certificate first:
 
 ```
 cd ~/.lightning/sparko-tls/
 openssl genrsa -out key.pem 2048
 openssl req -new -x509 -sha256 -key key.pem -out cert.pem -days 3650
 ```
+
+To use a certificate signed by LetsEncrypt, you must be able to bind to ports 80 and 443, which generally requires running as root. Specify options like the following:
+
+```shell
+sparko-host=sparko.mydomain.com
+sparko-tls-path=sparko-letsencrypt
+sparko-letsencrypt-email=myemail@gmail.com
+```
+
+Then try to visit `http://sparko.mydomain.com/`. If all is well you should get redirected to the `https://` page, if something is wrong it should appear on the logs.
+
+### Errors
 
 When starting `lightningd`, check the logs for errors regarding `sparko` initialization, they will be prefixed with `"plugin-sparko"`.
 
