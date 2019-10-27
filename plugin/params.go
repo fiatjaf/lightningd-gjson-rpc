@@ -57,9 +57,23 @@ func (params Params) Int(key string) (i int, err error) {
 	return
 }
 
+func (params Params) Float64(key string) (i float64, err error) {
+	v, ok := params[key]
+	if !ok {
+		err = errKey(key)
+		return
+	}
+	i, ok = v.(float64)
+	if !ok {
+		err = errType(key)
+	}
+	return
+}
+
 func errKey(key string) error {
 	return fmt.Errorf("no such key: %q", key)
 }
+
 func errType(key string) error {
 	return fmt.Errorf("key: %q failed type conversion", key)
 }
