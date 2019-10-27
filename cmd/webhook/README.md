@@ -2,7 +2,9 @@
 
 This plugin sends a webhook to any URL when a payment is received, sent or forwarded. It supports filtering just some of these events and dispatching the webhooks to multiple URLs (each can have its own filtering policies).
 
-The payload for each webhook is the _inner object_ of https://lightning.readthedocs.io/PLUGINS.html#invoice-payment, https://lightning.readthedocs.io/PLUGINS.html#sendpay-success and https://lightning.readthedocs.io/PLUGINS.html#forward-event, depending on the kind of event.
+It supports [all of the notification types lightningd produces](https://lightning.readthedocs.io/PLUGINS.html#notification-types). However, by default it will only dispatch `invoice_payment` and `sendpay_success`. The others are available only if you specify them explicitly in the URL querystring (see below).
+
+The payload sent for each webhook is the _inner object_ of the payload given by lightningd. For example, for `invoice_payment` it will be `{"label": "unique-label-for-invoice", "preimage": "0000000000000000000000000000000000000000000000000000000000000000", "msat": "10000msat" }`.
 
 ## How to install
 
@@ -22,14 +24,14 @@ To dispatch webhooks to multiple URLs, write them separated by commas, like `--w
 
 ### Filter events
 
-You can opt to receive only `payment`, `invoice` or `forward` events. To filter (in each URL) append a querystring parameter like `?filter-event=invoice` to the URL. You can repeat that parameter. If no parameters are given, all events will be dispatched.
+You can opt to receive only `payment`, `invoice` or `forward` events. To filter (in each URL) append a querystring parameter like `?filter-event=invoice` to the URL. You can repeat that parameter. If no parameters are given, `invoice_payment` and `sendpay_success` events will be dispatched.
 
 ### Example
 
 In my example configuration I have written the following line in `~/.lightning/config`:
 
 ```
-webhook=https://fiatjaf.free.beeceptor.com/all,https://fiatjaf.free.beeceptor.com/justpayments?filter-event=payment,https://fiatjaf.free.beeceptor.com/invoices/and/forwards?filter-event=invoice&filter-event=forward
+webhook=https://fiatjaf.free.beeceptor.com/all,https://fiatjaf.free.beeceptor.com/justpayments?filter-event=sendpay_success,https://fiatjaf.free.beeceptor.com/invoices/and/forwards?filter-event=invoice&filter-event=forward_event
 ```
 
 Then I got these events at [Beeceptor](https://beeceptor.com/):

@@ -26,38 +26,36 @@ func main() {
 			},
 		},
 		Subscriptions: []plugin.Subscription{
-			{
-				"invoice_payment",
-				func(p *plugin.Plugin, params plugin.Params) {
-					payload := params["invoice_payment"]
-					for _, url := range getURLs(p.Args["webhook"].(string), "invoice") {
-						dispatchWebhook(p, url, payload)
-					}
-				},
-			},
-			{
-				"sendpay_success",
-				func(p *plugin.Plugin, params plugin.Params) {
-					payload := params["sendpay_success"]
-					for _, url := range getURLs(p.Args["webhook"].(string), "payment") {
-						dispatchWebhook(p, url, payload)
-					}
-				},
-			},
-			{
-				"forward_event",
-				func(p *plugin.Plugin, params plugin.Params) {
-					payload := params["forward_event"]
-					for _, url := range getURLs(p.Args["webhook"].(string), "forward") {
-						dispatchWebhook(p, url, payload)
-					}
-				},
-			},
+			subscription("channel_opened"),
+			subscription("connect"),
+			subscription("disconnect"),
+			subscription("invoice_payment"),
+			subscription("warning"),
+			subscription("forward_event"),
+			subscription("sendpay_success"),
+			subscription("sendpay_failure"),
 		},
 		Dynamic: true,
 	}
 
 	p.Run()
+}
+
+func subscription(kind string) plugin.Subscription {
+	return plugin.Subscription{
+		kind,
+		func(p *plugin.Plugin, params plugin.Params) {
+			var payload interface{}
+			if kind == "connect" || kind == "disconnect" {
+				payload = params
+			} else {
+				payload = params[kind]
+			}
+			for _, url := range getURLs(p.Args["webhook"].(string), kind) {
+				dispatchWebhook(p, url, payload)
+			}
+		},
+	}
 }
 
 func getURLs(optvalue string, kind string) (urls []string) {
@@ -78,7 +76,7 @@ func getURLs(optvalue string, kind string) (urls []string) {
 					urls = append(urls, entry)
 				}
 			}
-		} else {
+		} else if kind == "sendpay_success" || kind == "invoice_payment" {
 			urls = append(urls, entry)
 		}
 	}
