@@ -11,9 +11,10 @@ import (
 )
 
 type Plugin struct {
-	Client *lightning.Client    `json:"-"`
-	Log    func(...interface{}) ` json:"-"`
-	Name   string               `json:"-"`
+	Client  *lightning.Client    `json:"-"`
+	Log     func(...interface{}) `json:"-"`
+	Name    string               `json:"-"`
+	Version string               `json:"-"`
 
 	Options       []Option       `json:"options"`
 	RPCMethods    []RPCMethod    `json:"rpcmethods"`
@@ -122,7 +123,7 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 			p.Client = &lightning.Client{Path: rpc}
 			p.Args = Params(params["options"].(map[string]interface{}))
 
-			p.Log("initialized plugin.")
+			p.Log("initialized plugin " + p.Version)
 			initialized <- true
 		case "getmanifest":
 			if p.Options == nil {

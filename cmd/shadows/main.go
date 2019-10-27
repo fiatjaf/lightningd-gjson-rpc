@@ -19,7 +19,8 @@ import (
 
 func main() {
 	p := plugin.Plugin{
-		Name: "shadows",
+		Name:    "shadows",
+		Version: "v0.1",
 		RPCMethods: []plugin.RPCMethod{
 			{
 				"shadow-invoice",

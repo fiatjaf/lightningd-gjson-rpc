@@ -17,7 +17,8 @@ func main() {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	p := plugin.Plugin{
-		Name: "webhook",
+		Name:    "webhook",
+		Version: "v3.0",
 		Options: []plugin.Option{
 			{
 				Name:        "webhook",
