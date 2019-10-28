@@ -14,9 +14,12 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var DefaultTimeout = time.Second * 5
+
 type Client struct {
 	PaymentHandler   func(gjson.Result)
 	LastInvoiceIndex int
+	CallTimeout      time.Duration
 
 	// lightning-rpc socket
 	Path string

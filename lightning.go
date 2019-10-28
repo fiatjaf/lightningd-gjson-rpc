@@ -8,14 +8,20 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-var DefaultTimeout = time.Second * 5
-
 func (ln *Client) Call(method string, params ...interface{}) (gjson.Result, error) {
-	return ln.CallWithCustomTimeout(DefaultTimeout, method, params...)
+	timeout := ln.CallTimeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	return ln.CallWithCustomTimeout(timeout, method, params...)
 }
 
 func (ln *Client) CallNamed(method string, params ...interface{}) (gjson.Result, error) {
-	return ln.CallNamedWithCustomTimeout(DefaultTimeout, method, params...)
+	timeout := ln.CallTimeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	return ln.CallNamedWithCustomTimeout(timeout, method, params...)
 }
 
 func (ln *Client) CallNamedWithCustomTimeout(

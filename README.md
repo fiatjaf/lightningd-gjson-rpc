@@ -25,6 +25,7 @@ func main () {
         Path:             "/home/whatever/.lightning/lightning-rpc",
         LastInvoiceIndex: lastinvoiceindex, // only needed if you're going to listen for invoices
         PaymentHandler:   handleInvoicePaid, // only needed if you're going to listen for invoices
+        CallTimeout: 10 * time.Second, // optional, defaults to 5 seconds
     }
     ln.ListenForInvoices() // optional
 
@@ -74,14 +75,14 @@ ln.CallNamed("invoice",
 
 ## Special methods
 
-Besides providing full access to the c-lightning RPC interface with `.Call` methods, we also have [ListenForInvoices](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.ListenForInvoices) and [PayAndWaitUntilResolution](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.PayAndWaitUntilResolution) for making your life better.
+Besides providing full access to the c-lightning RPC interface with `.Call` methods, we also have [ListenForInvoices](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.ListenForInvoices), [PayAndWaitUntilResolution](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.PayAndWaitUntilResolution) and [GetPrivateKey](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.GetPrivateKey) to make your life better.
 
 It's good to say also that since we don't have hardcoded methods here you can call [custom RPC methods](https://lightning.readthedocs.io/PLUGINS.html#json-rpc-passthrough) with this library.
 
-### Plugins
-
-We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [releases/](releases/).
-
-### Who's using this?
+## Who's using this?
 
 Besides our own plugins listed in the link above, there's also [@lntxbot](https://t.me/lntxbot), the Telegram Lightning wallet; [Sparko](https://github.com/fiatjaf/sparko), our better and cheaper alternative to Spark wallet; [Etleneum](https://etleneum.com/), the centralized smart contract platform; and [Lightning Charger](https://charger.alhur.es/), the lnurl-powered BTC-to-Lightning mobile wallet helper.
+
+## Plugins
+
+We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [releases/](releases/).
