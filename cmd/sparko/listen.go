@@ -97,5 +97,5 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 		}
 	}
 
-	p.Log("error listening: ", listenerr)
+	p.Log("error listening: " + listenerr.Error())
 }

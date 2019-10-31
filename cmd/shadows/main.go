@@ -133,15 +133,15 @@ func main() {
 		Hooks: []plugin.Hook{
 			{
 				"htlc_accepted",
-				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
+				func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 					next, ok := getNextChannel(params["onion"])
 					if !ok {
-						return map[string]interface{}{"result": "continue"}, 0, nil
+						return map[string]interface{}{"result": "continue"}
 					}
 
 					nextp := strings.Split(next, "x")
 					if len(nextp) != 3 {
-						return map[string]interface{}{"result": "continue"}, 0, nil
+						return map[string]interface{}{"result": "continue"}
 					}
 
 					// use the channel to get the preimage and label
@@ -160,10 +160,10 @@ func main() {
 						return map[string]interface{}{
 							"result":      "resolve",
 							"payment_key": hpreimage,
-						}, 0, nil
+						}
 					}
 
-					return map[string]interface{}{"result": "continue"}, 0, nil
+					return map[string]interface{}{"result": "continue"}
 				},
 			},
 		},

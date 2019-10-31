@@ -68,13 +68,22 @@ func (ln *Client) PayAndWaitUntilResolution(
 		}
 	}
 
+	maxdelaytotal := 0
+	if imaxdelaytotal, ok := params["maxdelaytotal"]; ok {
+		if converted, err := toFloat(imaxdelaytotal); err == nil {
+			maxdelaytotal = int(converted)
+		}
+	}
+
 	// first try all routehints
 	routehints := decoded.Get("routes").Array()
 	if len(routehints) > 0 {
 		for _, rh := range routehints {
 			done, payment := tryPayment(ln, &tries, bolt11,
 				payee, msatoshi, hash, label, &exclude,
-				delayFinalHop, riskfactor, maxfeepercent, exemptfee, &rh)
+				delayFinalHop, riskfactor,
+				maxfeepercent, exemptfee, maxdelaytotal,
+				&rh)
 			if done {
 				return true, payment, tries, nil
 			}
@@ -84,7 +93,9 @@ func (ln *Client) PayAndWaitUntilResolution(
 	// if none of the hints aided, try it without hints
 	done, payment := tryPayment(ln, &tries, bolt11,
 		payee, msatoshi, hash, label, &exclude,
-		delayFinalHop, riskfactor, maxfeepercent, exemptfee, nil)
+		delayFinalHop, riskfactor,
+		maxfeepercent, exemptfee, maxdelaytotal,
+		nil)
 	if done {
 		return true, payment, tries, nil
 	}
@@ -106,6 +117,7 @@ func tryPayment(
 	riskfactor interface{},
 	maxfeepercent float64,
 	exemptfee float64,
+	maxdelaytotal int,
 	hint *gjson.Result,
 ) (paid bool, payment gjson.Result) {
 	for try := 0; try < 40; try++ {
@@ -143,9 +155,17 @@ func tryPayment(
 			if msatoshi > exemptfee {
 				// otherwise try the next route
 				// we force that by excluding a channel
-				*exclude = append(*exclude, getWorstChannel(route))
+				*exclude = append(*exclude, getMostExpensiveChannel(route))
 				continue
 			}
+		}
+
+		// route max CLTV shouldn't be bigger than our parameter
+		if maxdelaytotal > 0 && int(route.Get("0.delay").Int()) > maxdelaytotal {
+			// otherwise try the next route
+			// we force that by excluding a channel
+			*exclude = append(*exclude, getMostTimelockedChannel(route))
+			continue
 		}
 
 		// ignore returned value here as we'll get it from waitsendpay below
@@ -238,7 +258,7 @@ func tryPayment(
 	return
 }
 
-func getWorstChannel(route gjson.Result) (worstChannel string) {
+func getMostExpensiveChannel(route gjson.Result) (worstChannel string) {
 	var worstFee int64 = 0
 	hops := route.Array()
 	if len(hops) == 1 {
@@ -251,6 +271,26 @@ func getWorstChannel(route gjson.Result) (worstChannel string) {
 		fee := hop.Get("msatoshi").Int() - next.Get("msatoshi").Int()
 		if fee > worstFee {
 			worstFee = fee
+			worstChannel = hop.Get("channel").String() + "/" + hop.Get("direction").String()
+		}
+	}
+
+	return
+}
+
+func getMostTimelockedChannel(route gjson.Result) (worstChannel string) {
+	var worstDelta int64 = 0
+	hops := route.Array()
+	if len(hops) == 1 {
+		return hops[0].Get("channel").String() + "/" + hops[0].Get("direction").String()
+	}
+
+	for i := 0; i+1 < len(hops); i++ {
+		hop := hops[i]
+		next := hops[i+1]
+		delta := hop.Get("delay").Int() - next.Get("delay").Int()
+		if delta > worstDelta {
+			worstDelta = delta
 			worstChannel = hop.Get("channel").String() + "/" + hop.Get("direction").String()
 		}
 	}

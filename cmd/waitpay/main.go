@@ -24,8 +24,8 @@ const manifest = `{
   "rpcmethods": [
     {
       "name": "waitpay",
-      "usage": "bolt11 [msatoshi] [riskfactor] [label] [maxfeepercent] [exemptfee] [description]",
-      "description": "Tries to pay the given invoice and blocks until it is finally paid or errored. Params mean the same as the 'pay' method, except {description}, which is the description preimage needed in case {bolt11} was encoded with a 'description_hash'."
+      "usage": "bolt11 [msatoshi] [riskfactor] [label] [maxfeepercent] [exemptfee] [maxdelaytotal] [description]",
+      "description": "Tries to pay the given invoice and blocks until it is finally paid or errored. Params mean the same as the 'pay' method, except {description}, which is the description preimage needed in case {bolt11} was encoded with a 'description_hash'. Also {maxdelaytotal} is an optional limit to the maximum timelock of the payment, it excludes routes longer than that."
     },
     {
       "name": "waitpaystatus",
@@ -36,7 +36,7 @@ const manifest = `{
   "subscriptions": []
 }`
 
-var waitpaykeys []string = []string{"bolt11", "msatoshi", "riskfactor", "label", "maxfeepercent", "exemptfee", "description"}
+var waitpaykeys []string = []string{"bolt11", "msatoshi", "riskfactor", "label", "maxfeepercent", "exemptfee", "maxdelaytotal", "description"}
 var waitpaystatuskeys []string = []string{"bolt11"}
 
 func main() {

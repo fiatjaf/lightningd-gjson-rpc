@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -11,10 +12,10 @@ import (
 )
 
 type Plugin struct {
-	Client  *lightning.Client    `json:"-"`
-	Log     func(...interface{}) `json:"-"`
-	Name    string               `json:"-"`
-	Version string               `json:"-"`
+	Client  *lightning.Client            `json:"-"`
+	Log     func(string, ...interface{}) `json:"-"`
+	Name    string                       `json:"-"`
+	Version string                       `json:"-"`
 
 	Options       []Option       `json:"options"`
 	RPCMethods    []RPCMethod    `json:"rpcmethods"`
@@ -50,13 +51,14 @@ func (s Subscription) MarshalJSON() ([]byte, error) { return json.Marshal(s.Type
 
 type Hook struct {
 	Type    string
-	Handler RPCHandler
+	Handler HookHandler
 }
 
 func (h Hook) MarshalJSON() ([]byte, error) { return json.Marshal(h.Type) }
 
 type RPCHandler func(p *Plugin, params Params) (resp interface{}, errCode int, err error)
 type NotificationHandler func(p *Plugin, params Params)
+type HookHandler func(p *Plugin, params Params) (resp interface{})
 
 func (p *Plugin) Run() {
 	initialized := make(chan bool)
@@ -85,9 +87,9 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 		hookmap[hook.Type] = hook
 	}
 
-	p.Log = func(args ...interface{}) {
-		args = append([]interface{}{"plugin-", p.Name, " "}, args...)
-		log.Print(args...)
+	p.Log = func(b string, args ...interface{}) {
+		str := "plugin-" + p.Name + " " + fmt.Sprintf(b, args...)
+		log.Print(str)
 	}
 
 	var msg lightning.JSONRPCMessage
@@ -178,28 +180,15 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 			}
 
 			if hook, ok := hookmap[msg.Method]; ok {
-				resp, errCode, err := hook.Handler(p, Params(msg.Params.(map[string]interface{})))
-				if err != nil {
-					if errCode == 0 {
-						errCode = -1
-					}
-
-					response.Error = &lightning.JSONRPCError{
-						Code:    errCode,
-						Message: err.Error(),
-					}
-					goto end
-				}
-
+				resp := hook.Handler(p, Params(msg.Params.(map[string]interface{})))
 				jresp, err := json.Marshal(resp)
 				if err != nil {
 					response.Error = &lightning.JSONRPCError{
 						Code:    500,
-						Message: "Error encoding method response.",
+						Message: "Error encoding hook response.",
 					}
 					goto end
 				}
-
 				response.Result = jresp
 			}
 
