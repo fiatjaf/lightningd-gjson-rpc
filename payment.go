@@ -20,6 +20,8 @@ func (ln *Client) PayAndWaitUntilResolution(
 	bolt11 string,
 	params map[string]interface{},
 ) (success bool, payment gjson.Result, tries []Try, err error) {
+	startTime := time.Now()
+
 	decodeparams := map[string]interface{}{"bolt11": bolt11}
 	if description_as_hash, ok := params["description"]; ok {
 		decodeparams["description"] = description_as_hash
@@ -79,7 +81,8 @@ func (ln *Client) PayAndWaitUntilResolution(
 	routehints := decoded.Get("routes").Array()
 	if len(routehints) > 0 {
 		for _, rh := range routehints {
-			done, payment := tryPayment(ln, &tries, bolt11,
+			done, payment := tryPayment(
+				ln, startTime, &tries, bolt11,
 				payee, msatoshi, hash, label, &exclude,
 				delayFinalHop, riskfactor,
 				maxfeepercent, exemptfee, maxdelaytotal,
@@ -91,7 +94,8 @@ func (ln *Client) PayAndWaitUntilResolution(
 	}
 
 	// if none of the hints aided, try it without hints
-	done, payment := tryPayment(ln, &tries, bolt11,
+	done, payment := tryPayment(
+		ln, startTime, &tries, bolt11,
 		payee, msatoshi, hash, label, &exclude,
 		delayFinalHop, riskfactor,
 		maxfeepercent, exemptfee, maxdelaytotal,
@@ -106,6 +110,7 @@ func (ln *Client) PayAndWaitUntilResolution(
 
 func tryPayment(
 	ln *Client,
+	startTime time.Time,
 	tries *[]Try,
 	bolt11 string,
 	payee string,
@@ -121,6 +126,11 @@ func tryPayment(
 	hint *gjson.Result,
 ) (paid bool, payment gjson.Result) {
 	for try := 0; try < 40; try++ {
+		if !time.Now().Before(startTime.Add(5 * time.Minute)) {
+			// if a previous try (or sum of tries) was pending for more than 5 minutes we won't try anything after
+			return
+		}
+
 		target := payee
 		if hint != nil {
 			target = hint.Get("0.pubkey").String()
