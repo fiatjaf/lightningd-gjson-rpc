@@ -52,8 +52,12 @@ func subscription(kind string) plugin.Subscription {
 			} else {
 				payload = params[kind]
 			}
-			for _, url := range getURLs(p.Args["webhook"].(string), kind) {
-				dispatchWebhook(p, url, payload)
+
+			urldata, _ := p.Args.String("webhook")
+			if urldata != "" {
+				for _, url := range getURLs(urldata, kind) {
+					dispatchWebhook(p, url, payload)
+				}
 			}
 		},
 	}
