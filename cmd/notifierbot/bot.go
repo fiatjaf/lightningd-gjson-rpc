@@ -12,8 +12,10 @@ import (
 
 func handle(p *plugin.Plugin, upd tgbotapi.Update) {
 	if upd.Message != nil {
+		p.Logf("bot received message: %s", upd.Message.Text)
 		handleMessage(p, upd.Message)
 	} else if upd.CallbackQuery != nil {
+		p.Logf("bot received click: %s", upd.CallbackQuery.Data)
 		answer := handleCallbackQuery(p, upd.CallbackQuery)
 		bot.AnswerCallbackQuery(tgbotapi.CallbackConfig{
 			CallbackQueryID: upd.CallbackQuery.ID,
@@ -48,7 +50,7 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 
 	if bolt11, ok := searchForInvoice(message); ok {
 		// it's an invoice we must replace
-		hash, newInvoice, err := makeInvoice(p, bolt11)
+		hash, newExpiry, newInvoice, err := makeInvoice(p, bolt11)
 		if err != nil {
 			bot.Send(tgbotapi.MessageConfig{
 				BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID},
@@ -58,23 +60,25 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 			return
 		}
 
-		go db.Update(func(tx *buntdb.Tx) error {
-			tx.Set(hash, `{"telegram": `+strconv.Itoa(telegramId)+`, "originalbolt11": "`+bolt11+`"}`,
-				&buntdb.SetOptions{Expires: true, TTL: time.Minute * 20 * 144})
-			return nil
-		})
-
 		bot.Send(tgbotapi.MessageConfig{
-			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID},
+			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID, ReplyToMessageID: message.MessageID},
 			Text:      "Awaitable BOLT11 invoice: <code>" + newInvoice + "</code>",
 			ParseMode: "HTML",
+		})
+		if err != nil {
+			return
+		}
+
+		db.Update(func(tx *buntdb.Tx) error {
+			tx.Set(hash, `{"telegram": `+strconv.Itoa(telegramId)+`, "originalbolt11": "`+bolt11+`"}`,
+				&buntdb.SetOptions{Expires: true, TTL: time.Duration(newExpiry) * time.Second * 2})
+			return nil
 		})
 	} else if b, err := hex.DecodeString(message.Text); err == nil && len(b) == 33 {
 		// it's a node id we must associate with this account
 		nodeid := message.Text
 
 		// check if node has an account with us
-		p.Client.Call("listpeers")
 		peers, err := p.Client.Call("listpeers", nodeid)
 		if err != nil || !peers.Get("peers.0").Exists() {
 			bot.Send(tgbotapi.MessageConfig{
@@ -85,7 +89,7 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 			return
 		}
 
-		go db.Update(func(tx *buntdb.Tx) error {
+		db.Update(func(tx *buntdb.Tx) error {
 			tx.Set(nodeid, `{"telegram": `+strconv.Itoa(telegramId)+`}`, nil)
 			return nil
 		})
@@ -119,18 +123,8 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 func handleCallbackQuery(p *plugin.Plugin, cb *tgbotapi.CallbackQuery) (answer string) {
 	var telegramId = cb.From.ID
 
-	switch cb.Data {
-	case "connected":
-		awaken.Pub(telegramId)
-		return "Receiving payment"
-	case "fail":
-		hash := cb.Message.Text[0:64]
-		failed.Pub(hash)
-		return "Payment rejected"
-	}
-
 	// remove keyboard (always)
-	bot.Send(tgbotapi.EditMessageReplyMarkupConfig{
+	defer bot.Send(tgbotapi.EditMessageReplyMarkupConfig{
 		BaseEdit: tgbotapi.BaseEdit{
 			MessageID: cb.Message.MessageID,
 			ChatID:    cb.Message.Chat.ID,
@@ -141,6 +135,16 @@ func handleCallbackQuery(p *plugin.Plugin, cb *tgbotapi.CallbackQuery) (answer s
 			},
 		},
 	})
+
+	switch cb.Data {
+	case "connected":
+		awaken.Pub(telegramId)
+		return "Receiving payment..."
+	case "fail":
+		hash := cb.Message.Text[0:64]
+		failed.Pub(hash)
+		return "Payment rejected!"
+	}
 
 	return ""
 }

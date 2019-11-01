@@ -62,7 +62,10 @@ func getOnionData(onion interface{}) (nextChannel string, nextAmount int, ok boo
 	return
 }
 
-func makeInvoice(p *plugin.Plugin, originalInvoice string) (hash string, newInvoice string, err error) {
+func makeInvoice(
+	p *plugin.Plugin,
+	originalInvoice string,
+) (hash string, newExpiry int64, newInvoice string, err error) {
 	// parse public key
 	nodeid := info.Get("id").String()
 	bnodeid, err := hex.DecodeString(nodeid)
@@ -114,7 +117,7 @@ func makeInvoice(p *plugin.Plugin, originalInvoice string) (hash string, newInvo
 	}
 
 	// check expiry
-	if createdAt+expiry < time.Now().Add(time.Second*7200).Unix() {
+	if createdAt+expiry < time.Now().Add(time.Minute*10).Unix() {
 		err = errors.New("invoice is expired or going to expire too soon!")
 		return
 	}
@@ -141,7 +144,7 @@ func makeInvoice(p *plugin.Plugin, originalInvoice string) (hash string, newInvo
 		ChannelID:                 uint64(channelid),
 		FeeBaseMSat:               0,
 		FeeProportionalMillionths: 3000,
-		CLTVExpiryDelta:           144,
+		CLTVExpiryDelta:           288,
 	}
 
 	// make the encoded invoice
@@ -169,5 +172,15 @@ func makeInvoice(p *plugin.Plugin, originalInvoice string) (hash string, newInvo
 		return
 	}
 
-	return hash, bolt11, nil
+	return hash, createdAt + expiry - time.Now().Unix(), bolt11, nil
+}
+
+func waitForBot(bot *tgbotapi.BotAPI) {
+	for {
+		if bot == nil {
+			time.Sleep(1 * time.Second)
+		} else {
+			break
+		}
+	}
 }

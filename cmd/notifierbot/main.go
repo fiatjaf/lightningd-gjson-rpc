@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -40,12 +41,11 @@ func main() {
 			{
 				"connect",
 				func(p *plugin.Plugin, params plugin.Params) {
+					nodeid := params["id"].(string)
 					if bot == nil {
 						return
 					}
 
-					nodeid := params["id"].(string)
-					p.Log("%s connected", nodeid)
 					db.View(func(tx *buntdb.Tx) error {
 						val, err := tx.Get(nodeid)
 						if err != nil {
@@ -53,7 +53,7 @@ func main() {
 						}
 
 						telegramId := gjson.Parse(val).Get("telegram").Int()
-						awaken.Pub(telegramId)
+						awaken.TryPub(telegramId)
 						return nil
 					})
 				},
@@ -61,22 +61,8 @@ func main() {
 			{
 				"sendpay_success",
 				func(p *plugin.Plugin, params plugin.Params) {
-					if bot == nil {
-						return
-					}
-
-					hash := params["payment_hash"].(string)
-					preimage := params["payment_preimage"].(string)
-
-					db.Update(func(tx *buntdb.Tx) error {
-						_, err := tx.Get(hash)
-						if err != nil {
-							return err
-						}
-
-						paid.Pub(preimage)
-						return nil
-					})
+					preimage := params["sendpay_success"].(map[string]interface{})["payment_preimage"].(string)
+					paid.TryPub(preimage)
 				},
 			},
 		},
@@ -84,10 +70,6 @@ func main() {
 			{
 				"htlc_accepted",
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
-					if bot == nil {
-						return continueHTLC
-					}
-
 					scid, msatoshi, ok := getOnionData(params["onion"])
 					if !ok {
 						return continueHTLC
@@ -95,19 +77,58 @@ func main() {
 					htlc := params["htlc"].(map[string]interface{})
 					hash := htlc["payment_hash"].(string)
 					timeLeft := int(htlc["cltv_expiry_relative"].(float64))
+					p.Logf("htlc_accepted %dmsat next=%s hash=%s timeleft=%d", msatoshi, scid, hash, timeLeft)
 
-					// get peer for this channel -- or none and just continue the HTLC flow
+					// data used to notify the user and then pay his original invoice
 					var telegramId int64
 					var originalbolt11 string
+					var isPaid bool
+					var isLocalPeer bool
 
-					peers, err := p.Client.Call("listpeers")
+					// is this an HTLC that's being retried? we should check if we've paid it to someone else
+					// already so we can claim it and don't lose money
+					sendpays, err := p.Client.CallNamed("listsendpays", "payment_hash", hash)
 					if err != nil {
-						p.Log("failed to listpeers, something is badly wrong")
+						p.Log("Unexpectedly failed to call listsendpays on htlc_accepted: " + err.Error())
 						return continueHTLC
 					}
-					peer := peers.Get(`peers.#(channels.0.short_channel_id=="` + scid + `")`)
-					if peer.Exists() {
+
+					sendpay := sendpays.Get("payments.0")
+					if sendpay.Exists() {
+						// this payment was tried / it's been tried still
+						switch sendpay.Get("status").String() {
+						case "pending":
+							// we'll jump to the listen flow, but skip paying and
+							// notifying the user as that was already done
+							isPaid = true
+							goto listen
+						case "failed":
+							// even in "failed" case this might still be pending if it's recent enough
+							if !time.Unix(sendpay.Get("created_at").Int(), 0).Before(
+								time.Now().Add(time.Minute * 5),
+							) {
+								isPaid = true
+								goto listen
+							}
+						case "complete":
+							// no matter what happened, if we have a preimage for a pending HTLC we resolve it
+							return map[string]interface{}{
+								"result":      "resolve",
+								"payment_key": sendpay.Get("payment_preimage").String(),
+							}
+						}
+					}
+
+					// now we start the normal flow
+					waitForBot(bot)
+
+					// get peer for this channel -- or none and just continue the HTLC flow
+					if res, err := p.Client.Call("listpeers"); err != nil {
+						p.Logf("failed to listpeers, something is badly wrong")
+						return continueHTLC
+					} else if peer := res.Get(`peers.#(channels.0.short_channel_id=="` + scid + `")`); peer.Exists() {
 						// it's a peer with a direct channel here
+						isLocalPeer = true
 
 						// if it's already connected, just continue
 						if peer.Get("connected").Bool() {
@@ -135,24 +156,26 @@ func main() {
 
 							data := gjson.Parse(val)
 							telegramId = data.Get("telegram").Int()
-							originalbolt11 = data.Get("bolt11").String()
+							originalbolt11 = data.Get("originalbolt11").String()
 							return nil
 						})
 					}
 
 					if telegramId == 0 {
 						// didn't find a telegram peer
+						p.Log("didn't find a telegram peer for HTLC, continuing")
 						return continueHTLC
 					}
 
 					// send telegram message
-					p.Log("htlc_accepted for telegram user %d, hash %s, %dmsat", telegramId, hash, msatoshi)
+					p.Logf("htlc_accepted for telegram user %d, hash %s, %dmsat", telegramId, hash, msatoshi)
 					err = notify(telegramId, hash, msatoshi)
 					if err != nil {
 						// failed to notify, so fail
 						return failHTLC
 					}
 
+				listen:
 					// now we wait until peer is connected to release the HTLC or give up after 30 minutes
 					wakes, _ := awaken.Sub(context.TODO(), 1)
 					defer awaken.Unsub(wakes)
@@ -161,48 +184,65 @@ func main() {
 					fails, _ := failed.Sub(context.TODO(), 1)
 					defer failed.Unsub(fails)
 
+					sendingPayment := false
 					for {
 						select {
 						case <-time.After(30 * time.Minute):
-							p.Log("30min timeout for HTLC %s. failing.", hash)
-							return failHTLC
+							if !sendingPayment {
+								p.Logf("30min timeout for HTLC %s. failing.", hash)
+								return failHTLC
+							}
 						case tgid := <-wakes:
 							// peer is awaken, so release the payment or do the preimage-fetching gimmick
-							if tgid == telegramId {
-								p.Log("peer %d is online. proceeding with HTLC %s.", telegramId, hash)
+							if int64(tgid.(int)) == telegramId {
+								p.Logf("peer %d is online. proceeding with HTLC %s.", telegramId, hash)
 								// user is now online, we can proceed to send the payment
-								if peer.Exists() {
+								if isLocalPeer {
 									// invoice points to direct channel with peer, so just continue
 									return continueHTLC
-								} else {
+								} else if !isPaid {
 									// peer is elsewhere on the network, so send him a payment
 									if timeLeft < 32 {
-										// too risky, but this should never happen and should always be 144 anyway
+										// too risky, but this should never happen and should always be 288 anyway
 										return failHTLC
 									}
 
-									p.Log("sending payment to fetch preimage for %s, timeleft=%d", hash, timeLeft)
-									go p.Client.PayAndWaitUntilResolution(originalbolt11, map[string]interface{}{
-										"maxfeepercent": 0.3, // because we add 0.3% to the original invoice
-										"maxdelaytotal": timeLeft - 23,
-									})
-									if err != nil {
-										return failHTLC
-									}
+									p.Logf("sending payment to %s to fetch preimage for %s, timeleft=%d",
+										originalbolt11, hash, timeLeft)
+									go func() {
+										sendingPayment = true
+										ok, _, tries, err := p.Client.PayAndWaitUntilResolution(
+											originalbolt11,
+											map[string]interface{}{
+												"maxfeepercent": 0.3, // because we add 0.3%
+												"maxdelaytotal": timeLeft - 23,
+											})
 
+										if err != nil {
+											p.Logf("error sending preimage-fetching payment: %s", err)
+											failed.TryPub(hash)
+										}
+										if ok == false {
+											p.Logf("failed to send preimage-fetching payment: %v", tries)
+											failed.TryPub(hash)
+										}
+
+										// we only handle failure here.
+										// in case of success we should see a sendpay_success notification.
+									}()
 								}
 							}
 						case fhash := <-fails:
 							// see if this hash matches ours and fail if yes
 							if fhash.(string) == hash {
-								p.Log("%d will not be able to receive HTLC %s. failing,.", telegramId, hash)
+								p.Logf("%d will not be able to receive HTLC %s. failing,.", telegramId, hash)
 								return failHTLC
 							}
 						case preimage := <-pays:
 							// see if this preimage matches our hash and resolve if yes
 							if bpreimage, err := hex.DecodeString(preimage.(string)); err == nil {
 								if bhash := sha256.Sum256(bpreimage); hex.EncodeToString(bhash[:]) == hash {
-									p.Log("got preimage for HTLC %s from user %d. resolving.", hash, telegramId)
+									p.Logf("got preimage for HTLC %s from user %d. resolving.", hash, telegramId)
 									return map[string]interface{}{
 										"result":      "resolve",
 										"payment_key": preimage,
@@ -220,7 +260,7 @@ func main() {
 			// get our node info
 			info, err = p.Client.Call("getinfo")
 			if err != nil {
-				p.Log("failed to getinfo: " + err.Error())
+				p.Logf("failed to getinfo: " + err.Error())
 				return
 			}
 			// get params
@@ -236,7 +276,7 @@ func main() {
 			// open database
 			db, err = buntdb.Open(databaseFile)
 			if err != nil {
-				p.Log("failed to open database at " + databaseFile + ": " + err.Error())
+				p.Logf("failed to open database at " + databaseFile + ": " + err.Error())
 				return
 			}
 			defer db.Close()
@@ -244,7 +284,7 @@ func main() {
 			// create bot
 			bot, err = tgbotapi.NewBotAPI(botToken)
 			if err != nil {
-				p.Log("failed to instantiate bot: " + err.Error())
+				p.Logf("failed to instantiate bot: " + err.Error())
 				return
 			}
 
@@ -260,11 +300,17 @@ func main() {
 				return nil
 			})
 
-			updates, _ := bot.GetUpdatesChan(tgbotapi.UpdateConfig{
+			updates, err := bot.GetUpdatesChan(tgbotapi.UpdateConfig{
 				Offset:  lastUpdate + 1,
 				Limit:   100,
 				Timeout: 120,
 			})
+			if err != nil {
+				p.Log("couldn't start listening for Telegram events: " + err.Error())
+				return
+			}
+
+			log.Print(updates)
 			for update := range updates {
 				handle(p, update)
 				go db.Update(func(tx *buntdb.Tx) error {
