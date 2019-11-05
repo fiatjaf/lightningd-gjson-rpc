@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,6 +30,8 @@ var continueHTLC = map[string]interface{}{"result": "continue"}
 var failHTLC = map[string]interface{}{"result": "fail", "failure_code": 8194}
 
 func main() {
+	http.DefaultTransport.(*http.Transport).Proxy = http.ProxyFromEnvironment
+
 	p := plugin.Plugin{
 		Name:    "notifierbot",
 		Version: "v0.1",

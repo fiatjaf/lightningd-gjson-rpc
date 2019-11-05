@@ -15,10 +15,11 @@ import (
 
 func main() {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	http.DefaultTransport.(*http.Transport).Proxy = http.ProxyFromEnvironment
 
 	p := plugin.Plugin{
 		Name:    "webhook",
-		Version: "v3.0",
+		Version: "v3.1",
 		Options: []plugin.Option{
 			{
 				Name:        "webhook",
