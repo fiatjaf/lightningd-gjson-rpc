@@ -50,6 +50,12 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 
 	if bolt11, ok := searchForInvoice(message); ok {
 		// it's an invoice we must replace
+		bot.Send(tgbotapi.MessageConfig{
+			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID, ReplyToMessageID: message.MessageID},
+			Text:      "Transling into an awaitable invoice...",
+			ParseMode: "HTML",
+		})
+
 		hash, newExpiry, newInvoice, err := makeInvoice(p, bolt11)
 		if err != nil {
 			bot.Send(tgbotapi.MessageConfig{
@@ -62,12 +68,9 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 
 		bot.Send(tgbotapi.MessageConfig{
 			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID, ReplyToMessageID: message.MessageID},
-			Text:      "Awaitable BOLT11 invoice: <code>" + newInvoice + "</code>",
+			Text:      "<pre>" + newInvoice + "</pre>",
 			ParseMode: "HTML",
 		})
-		if err != nil {
-			return
-		}
 
 		db.Update(func(tx *buntdb.Tx) error {
 			tx.Set(hash, `{"telegram": `+strconv.Itoa(telegramId)+`, "originalbolt11": "`+bolt11+`"}`,
@@ -113,8 +116,13 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 
 		// show instructions
 		bot.Send(tgbotapi.MessageConfig{
-			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID},
-			Text:      pre + "Send your node id if you're connected to us at <code>" + info.Get("id").String() + "</code> or any BOLT11 invoice to translate if not.",
+			BaseChat: tgbotapi.BaseChat{ChatID: message.Chat.ID},
+			Text: pre + `
+1. You have a mobile wallet and want to receive a Lightning payment.
+2. Generate an invoice and <b>paste it here</b> to get a corresponding <i>awaitable invoice</i>.
+3. Give the awaitable invoice to the payer.
+4. When they pay you'll get a notification and will have <i>30 minutes</i> to open your wallet.
+            `,
 			ParseMode: "HTML",
 		})
 	}
