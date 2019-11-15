@@ -174,13 +174,3 @@ func makeInvoice(
 
 	return hash, createdAt + expiry - time.Now().Unix(), bolt11, nil
 }
-
-func waitForBot(bot *tgbotapi.BotAPI) {
-	for {
-		if bot == nil {
-			time.Sleep(1 * time.Second)
-		} else {
-			break
-		}
-	}
-}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"strconv"
 	"time"
 
@@ -52,7 +51,7 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 		// it's an invoice we must replace
 		bot.Send(tgbotapi.MessageConfig{
 			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID, ReplyToMessageID: message.MessageID},
-			Text:      "Transling into an awaitable invoice...",
+			Text:      "Translating into an awaitable invoice...",
 			ParseMode: "HTML",
 		})
 
@@ -77,47 +76,11 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 				&buntdb.SetOptions{Expires: true, TTL: time.Duration(newExpiry) * time.Second * 2})
 			return nil
 		})
-	} else if b, err := hex.DecodeString(message.Text); err == nil && len(b) == 33 {
-		// it's a node id we must associate with this account
-		nodeid := message.Text
-
-		// check if node has an account with us
-		peers, err := p.Client.Call("listpeers", nodeid)
-		if err != nil || !peers.Get("peers.0").Exists() {
-			bot.Send(tgbotapi.MessageConfig{
-				BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID},
-				Text:      "You don't have a channel with us.",
-				ParseMode: "HTML",
-			})
-			return
-		}
-
-		db.Update(func(tx *buntdb.Tx) error {
-			tx.Set(nodeid, `{"telegram": `+strconv.Itoa(telegramId)+`}`, nil)
-			return nil
-		})
-
-		bot.Send(tgbotapi.MessageConfig{
-			BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID},
-			Text:      "Done.",
-			ParseMode: "HTML",
-		})
 	} else {
-		// show status if exists
-		var pre string
-		db.View(func(tx *buntdb.Tx) error {
-			nodeid, err := tx.Get(strconv.Itoa(telegramId))
-			if err != nil {
-				return err
-			}
-			pre = "You're connected with the node id <code>" + nodeid + "</code>.\n\n"
-			return nil
-		})
-
 		// show instructions
 		bot.Send(tgbotapi.MessageConfig{
 			BaseChat: tgbotapi.BaseChat{ChatID: message.Chat.ID},
-			Text: pre + `
+			Text: `
 1. You have a mobile wallet and want to receive a Lightning payment.
 2. Generate an invoice and <b>paste it here</b> to get a corresponding <i>awaitable invoice</i>.
 3. Give the awaitable invoice to the payer.
