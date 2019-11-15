@@ -85,4 +85,4 @@ Besides our own plugins listed in the link above, there's also [@lntxbot](https:
 
 ## Plugins
 
-We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [release page](https://github.com/fiatjaf/lightningd-gjson-rpc/releases).
+We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [releases/](https://github.com/fiatjaf/lightningd-gjson-rpc/releases).
