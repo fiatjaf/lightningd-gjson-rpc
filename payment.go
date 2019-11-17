@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fiatjaf/ln-decodepay/gjson"
 	"github.com/tidwall/gjson"
 )
 
@@ -22,12 +23,7 @@ func (ln *Client) PayAndWaitUntilResolution(
 ) (success bool, payment gjson.Result, tries []Try, err error) {
 	startTime := time.Now()
 
-	decodeparams := map[string]interface{}{"bolt11": bolt11}
-	if description_as_hash, ok := params["description"]; ok {
-		decodeparams["description"] = description_as_hash
-	}
-
-	decoded, err := ln.Call("decodepay", decodeparams)
+	decoded, err := decodepay_gjson.Decodepay(bolt11)
 	if err != nil {
 		return false, payment, tries, err
 	}
