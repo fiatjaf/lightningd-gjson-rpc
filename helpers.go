@@ -1,6 +1,7 @@
 package lightning
 
 import (
+	"encoding/hex"
 	"errors"
 	"strconv"
 )
@@ -22,4 +23,19 @@ func toFloat(val interface{}) (float64, error) {
 	}
 
 	return 0, errors.New("Can't convert to float.")
+}
+
+func as32(v []byte) (res [32]byte) {
+	for i := 0; i < 32; i++ {
+		res[i] = v[i]
+	}
+	return
+}
+
+func asByte32(hexstr string) (res [32]byte, err error) {
+	v, err := hex.DecodeString(hexstr)
+	if err != nil {
+		return
+	}
+	return as32(v), nil
 }

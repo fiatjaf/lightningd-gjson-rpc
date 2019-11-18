@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc"
+	decodepay "github.com/fiatjaf/ln-decodepay"
 	"github.com/tidwall/gjson"
 )
 
@@ -116,8 +117,9 @@ func main() {
 
 			if !success {
 				// in this case we fetch the failed payment object from lightningd for consistency
+				decoded, _ := decodepay.Decodepay(bolt11)
 				var res gjson.Result
-				res, err = ln.Call("listsendpays", bolt11)
+				res, err = ln.CallNamed("listsendpays", "payment_hash", decoded.PaymentHash)
 				if err != nil {
 					goto listsendpayserr
 				}
