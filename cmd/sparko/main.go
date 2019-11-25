@@ -8,6 +8,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
+	"github.com/fiatjaf/ln-decodepay"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 )
@@ -35,6 +36,22 @@ func main() {
 			{"sparko-keys", "string", nil, "semicolon-separated list of key-permissions pairs"},
 			{"sparko-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for TLS (relative to your lightning directory)"},
 			{"sparko-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
+		},
+		RPCMethods: []plugin.RPCMethod{
+			{
+				"gentlydecodepay",
+				"bolt11",
+				"(Hopefully) the same as decodepay, but without checking description_hash",
+				"Because providing a description to be checked against description_hash is a pain",
+				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
+					bolt11, _ := params.String("bolt11")
+					decoded, err := decodepay.Decodepay(bolt11)
+					if err != nil {
+						return nil, -1, err
+					}
+					return decoded, 0, nil
+				},
+			},
 		},
 		Subscriptions: []plugin.Subscription{
 			{

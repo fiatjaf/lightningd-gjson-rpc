@@ -14,7 +14,7 @@ import (
 func (ln *Client) InvoiceWithDescriptionHash(
 	label string,
 	msatoshi int64,
-	plainDescription string,
+	plainDescriptionOrHash interface{}, /* can be either a string (plainDescription) or a []byte (the hash directly) */
 	ppreimage *[]byte,
 	pexpiry *time.Duration,
 ) (bolt11 string, err error) {
@@ -29,9 +29,17 @@ func (ln *Client) InvoiceWithDescriptionHash(
 		}
 	}
 
-	dhash := sha256.Sum256([]byte(plainDescription))
-	dhash32 := as32(dhash[:])
-	description_hash := hex.EncodeToString(dhash[:])
+	var descriptionHash []byte
+	switch v := plainDescriptionOrHash.(type) {
+	case string:
+		dhash := sha256.Sum256([]byte(v))
+		descriptionHash = dhash[:]
+	case []byte:
+		descriptionHash = v
+	}
+
+	dhash32 := as32(descriptionHash)
+	description_hash := hex.EncodeToString(descriptionHash)
 
 	// create an invoice at the node so it expects for a payment at this hash
 	// we won't expose this, but it will still get paid

@@ -50,8 +50,14 @@ func (params Params) Int(key string) (i int, err error) {
 		err = errKey(key)
 		return
 	}
-	i, ok = v.(int)
-	if !ok {
+	switch n := v.(type) {
+	case int:
+		i = n
+	case int64:
+		i = int(n)
+	case float64:
+		i = int(n)
+	default:
 		err = errType(key)
 	}
 	return
@@ -63,8 +69,14 @@ func (params Params) Float64(key string) (i float64, err error) {
 		err = errKey(key)
 		return
 	}
-	i, ok = v.(float64)
-	if !ok {
+	switch n := v.(type) {
+	case int:
+		i = float64(n)
+	case int64:
+		i = float64(n)
+	case float64:
+		i = n
+	default:
 		err = errType(key)
 	}
 	return
