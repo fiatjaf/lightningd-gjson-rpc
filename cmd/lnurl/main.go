@@ -13,8 +13,9 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/fiatjaf/go-lnurl"
+	"github.com/fiatjaf/lightningd-gjson-rpc/cmd/lnurl/server"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
-	decodepay "github.com/fiatjaf/ln-decodepay"
+	"github.com/fiatjaf/ln-decodepay"
 	"github.com/tidwall/gjson"
 )
 
@@ -24,7 +25,21 @@ func main() {
 
 	p := plugin.Plugin{
 		Name:    "lnurl",
-		Version: "v0.2",
+		Version: "v0.3",
+		Options: []plugin.Option{
+			{"lnurl-host", "string", "127.0.0.1", "http(s) lnurl server listen address"},
+			{"lnurl-port", "string", server.DEFAULTPORT, "http(s) lnurl server port"},
+			{"lnurl-keys", "string", nil, "semicolon-separated list of API keys for lnurl server"},
+			{"lnurl-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for the lnurl server TLS (relative to your lightning directory)"},
+			{"lnurl-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
+			{"lnurl-db-path", "string", "lnurl/server.db", "path to store your lnurl server database (relative to your lightning directory)"},
+		},
+		Subscriptions: []plugin.Subscription{
+			{
+				"invoice_payment",
+				server.GotPayment,
+			},
+		},
 		RPCMethods: []plugin.RPCMethod{
 			{
 				"lnurlencode",
@@ -294,6 +309,7 @@ func main() {
 				},
 			},
 		},
+		OnInit: server.Start,
 	}
 
 	p.Run()
