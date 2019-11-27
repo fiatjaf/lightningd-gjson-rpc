@@ -23,9 +23,6 @@ var paid = caster.New(context.TODO())   // emits preimages
 var failed = caster.New(context.TODO()) // emits hashes
 var info gjson.Result                   // the result from 'getinfo'
 
-var continueHTLC = map[string]interface{}{"result": "continue"}
-var failHTLC = map[string]interface{}{"result": "fail", "failure_code": 8194}
-
 func main() {
 	http.DefaultTransport.(*http.Transport).Proxy = http.ProxyFromEnvironment
 

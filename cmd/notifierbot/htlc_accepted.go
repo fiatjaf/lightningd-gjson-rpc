@@ -11,6 +11,9 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var continueHTLC = map[string]interface{}{"result": "continue"}
+var failHTLC = map[string]interface{}{"result": "fail", "failure_code": 8194}
+
 /* when we accept an HTLC it can be either
 1. new -- in which case we must do
   a. check the next channel and see if it comes from an awaitable invoice;
@@ -174,6 +177,7 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 					ok, _, tries, err := p.Client.PayAndWaitUntilResolution(
 						originalbolt11,
 						map[string]interface{}{
+							"exemptfee":     2,
 							"maxfeepercent": 0.3, // because we add 0.3%
 							"maxdelaytotal": timeLeft - 23,
 						})
@@ -197,7 +201,7 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 		case fhash := <-fails:
 			// see if this hash matches ours and fail if yes
 			if fhash.(string) == hash {
-				p.Logf("%d will not be able to receive HTLC %s. failing,.", telegramId, hash)
+				p.Logf("%d will not be able to receive HTLC %s. failing.", telegramId, hash)
 				return failHTLC
 			}
 

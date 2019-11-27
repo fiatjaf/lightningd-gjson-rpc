@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc"
-	decodepay "github.com/fiatjaf/ln-decodepay"
+	"github.com/fiatjaf/ln-decodepay"
 	"github.com/tidwall/gjson"
 )
 

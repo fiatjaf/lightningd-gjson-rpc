@@ -156,7 +156,7 @@ func tryPayment(
 		}
 
 		// inspect route, it shouldn't be too expensive
-		if route.Get("0.msatoshi").Float()/msatoshi > (1 + 1/maxfeepercent) {
+		if route.Get("0.msatoshi").Float()/msatoshi > (1 + maxfeepercent/100) {
 			// too expensive, but we'll still accept it if the payment is small
 			if msatoshi > exemptfee {
 				// otherwise try the next route
