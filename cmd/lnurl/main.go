@@ -33,6 +33,7 @@ func main() {
 			{"lnurl-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for the lnurl server TLS (relative to your lightning directory)"},
 			{"lnurl-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
 			{"lnurl-db-path", "string", "lnurl/server.db", "path to store your lnurl server database (relative to your lightning directory)"},
+			{"lnurl-hmac-key", "string", nil, "a random string to serve as the hmac secret, defaults to a key derived from hsm_secret."},
 		},
 		Subscriptions: []plugin.Subscription{
 			{

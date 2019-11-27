@@ -1,9 +1,11 @@
 package server
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -25,33 +27,42 @@ type Template struct {
 	Webhook      string            `json:"webhook"`
 }
 
-func (t *Template) MakeURL(baseURL string, params map[string]string) string {
+func (t *Template) MakeURL(baseURL string, hmacKey []byte, params map[string]string) string {
+	u, _ := url.Parse(baseURL + "/" + t.Id + "/")
+
+	// add path params
 	path := make([]string, len(t.URLParams))
 	for i, key := range t.URLParams {
 		value, _ := params[key]
 		path[i] = fmt.Sprint(value)
 	}
+	if len(path) > 0 {
+		u.Path += strings.Join(path, "/")
+	}
 
-	var qs []string
-	var qsencoded string
+	// add querystring params
+	qs := url.Values{}
 	for key, _ := range t.QueryParams {
 		if value, ok := params[key]; ok {
-			qs = append(qs,
-				fmt.Sprintf("%s=%s", url.QueryEscape(key), url.QueryEscape(value)))
+			qs.Set(key, fmt.Sprint(value))
 		}
 	}
-	if len(qs) > 0 {
-		qsencoded = "?" + strings.Join(qs, "&")
-	}
 
-	return baseURL + "/" + t.Id + "/" + strings.Join(path, "/") + qsencoded
+	// add hmac
+	mac := hmac.New(sha256.New, hmacKey)
+	mac.Write([]byte(u.Path))
+	qs.Set("hmac", hex.EncodeToString(mac.Sum(nil)))
+
+	u.RawQuery = qs.Encode()
+	return u.String()
 }
 
-func FromURL(u *url.URL) (t Template, params map[string]string, err error) {
+func FromURL(u *url.URL, hmacKey []byte) (t Template, params map[string]string, err error) {
 	if !strings.HasPrefix(u.Path, "/") {
 		u.Path = "/" + u.Path
 	}
 
+	qs := u.Query()
 	spl := strings.Split(u.Path, "/")
 	if len(spl) < 4 {
 		err = fmt.Errorf("invalid path: %s", u.Path)
@@ -85,8 +96,18 @@ func FromURL(u *url.URL) (t Template, params map[string]string, err error) {
 		params[paramName] = value
 	}
 
+	// verify path hmac
+	code, _ := hex.DecodeString(qs.Get("hmac"))
+	mac := hmac.New(sha256.New, hmacKey)
+	mac.Write([]byte(u.Path))
+	if !hmac.Equal(code, mac.Sum(nil)) {
+		err = errors.New("invalid lnurl: hmac doesn't match")
+		return
+	}
+	qs.Del("hmac")
+
 	// get params from querystring
-	for paramName, values := range u.Query() {
+	for paramName, values := range qs {
 		value := values[0]
 		params[paramName] = value
 	}

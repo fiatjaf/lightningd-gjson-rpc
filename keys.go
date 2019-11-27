@@ -22,6 +22,18 @@ func (ln *Client) GetCustomKey(
 	index byte,
 	label string,
 ) (sk *btcec.PrivateKey, err error) {
+	key, err := ln.GetCustomBytes(index, label)
+	if err != nil {
+		return nil, err
+	}
+	sk, _ = btcec.PrivKeyFromBytes(btcec.S256(), key)
+	return
+}
+
+func (ln *Client) GetCustomBytes(
+	index byte,
+	label string,
+) (b []byte, err error) {
 	if ln.Path == "" {
 		return nil, errors.New("Path must be set so we know where the lightning folder is.")
 	}
@@ -38,12 +50,11 @@ func (ln *Client) GetCustomKey(
 
 	hkdf := hkdf.New(hash, secret, salt, info)
 
-	key := make([]byte, 32)
-	_, err = io.ReadFull(hkdf, key)
+	b = make([]byte, 32)
+	_, err = io.ReadFull(hkdf, b)
 	if err != nil {
 		return
 	}
 
-	sk, _ = btcec.PrivKeyFromBytes(btcec.S256(), key)
-	return
+	return b, nil
 }

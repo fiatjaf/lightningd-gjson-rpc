@@ -85,6 +85,7 @@ func getLNURL(w http.ResponseWriter, r *http.Request) {
 
 		url := t.MakeURL(
 			r.Context().Value("serviceURL").(string)+"/lnurl/params",
+			r.Context().Value("hmacKey").([]byte),
 			params,
 		)
 		lnurlEncoded, err := lnurl.LNURLEncode(url)
@@ -131,22 +132,26 @@ func payStreamWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func lnurlPayParams(w http.ResponseWriter, r *http.Request) {
-	t, params, err := FromURL(r.URL)
+	t, params, err := FromURL(r.URL, r.Context().Value("hmacKey").([]byte))
 	if err != nil {
-		json.NewEncoder(w).Encode(ErrorResponse{"failed to parse URL: " + err.Error()})
+		json.NewEncoder(w).Encode(lnurl.ErrorResponse("failed to parse URL: " + err.Error()))
 		return
 	}
 
 	price, err := t.GetInvoicePrice(params)
 	if err != nil {
-		json.NewEncoder(w).Encode(ErrorResponse{"failed to calculate price: " + err.Error()})
+		json.NewEncoder(w).Encode(lnurl.ErrorResponse("failed to calculate price: " + err.Error()))
 		return
 	}
 
 	serviceURL := r.Context().Value("serviceURL").(string)
 	json.NewEncoder(w).Encode(lnurl.LNURLPayResponse1{
-		Tag:             "payRequest",
-		Callback:        t.MakeURL(serviceURL+"/lnurl/values", params),
+		Tag: "payRequest",
+		Callback: t.MakeURL(
+			serviceURL+"/lnurl/values",
+			r.Context().Value("hmacKey").([]byte),
+			params,
+		),
 		EncodedMetadata: t.EncodedMetadata(params),
 		MinSendable:     price,
 		MaxSendable:     price,
@@ -154,16 +159,16 @@ func lnurlPayParams(w http.ResponseWriter, r *http.Request) {
 }
 
 func lnurlPayValues(w http.ResponseWriter, r *http.Request) {
-	t, params, err := FromURL(r.URL)
+	t, params, err := FromURL(r.URL, r.Context().Value("hmacKey").([]byte))
 	if err != nil {
-		json.NewEncoder(w).Encode(ErrorResponse{"failed to parse URL: " + err.Error()})
+		json.NewEncoder(w).Encode(lnurl.ErrorResponse("failed to parse URL: " + err.Error()))
 		return
 	}
 
 	client := r.Context().Value("client").(*lightning.Client)
 	invoice, err := t.GetInvoice(client, params)
 	if err != nil {
-		json.NewEncoder(w).Encode(ErrorResponse{"failed to generate invoice: " + err.Error()})
+		json.NewEncoder(w).Encode(lnurl.ErrorResponse("failed to generate invoice: " + err.Error()))
 		return
 	}
 

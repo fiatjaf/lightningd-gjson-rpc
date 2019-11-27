@@ -106,11 +106,22 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 	letsemail, _ := p.Args.String("lnurl-letsencrypt-email")
 	tlspath := getPath(p, "lnurl-tls-path")
 
+	hmacKeyStr, _ := p.Args.String("lnurl-hmac-key")
+	var hmacKey []byte
+	if hmacKeyStr != "" {
+		hmacKey = []byte(hmacKeyStr)
+	} else {
+		hmacKey = getDefaultHMACKey(p.Client)
+	}
+
 	var serviceURL string
 	getBaseContext := func(_ net.Listener) context.Context {
 		return context.WithValue(
 			context.WithValue(
-				context.Background(),
+				context.WithValue(
+					context.Background(),
+					"hmacKey", hmacKey,
+				),
 				"client", p.Client,
 			),
 			"serviceURL", serviceURL,
