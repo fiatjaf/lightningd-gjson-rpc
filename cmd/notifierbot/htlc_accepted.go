@@ -12,7 +12,7 @@ import (
 )
 
 var continueHTLC = map[string]interface{}{"result": "continue"}
-var failHTLC = map[string]interface{}{"result": "fail", "failure_code": 8194}
+var failHTLC = map[string]interface{}{"result": "fail", "failure_code": 16399}
 
 /* when we accept an HTLC it can be either
 1. new -- in which case we must do
