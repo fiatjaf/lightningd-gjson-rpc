@@ -25,7 +25,7 @@ func main() {
 
 	p := plugin.Plugin{
 		Name:    "lnurl",
-		Version: "v0.3",
+		Version: "v1.0",
 		Options: []plugin.Option{
 			{"lnurl-host", "string", "127.0.0.1", "http(s) lnurl server listen address"},
 			{"lnurl-port", "string", server.DEFAULTPORT, "http(s) lnurl server port"},
@@ -44,7 +44,7 @@ func main() {
 			{
 				"lnurlencode",
 				"url",
-				"Will encode an URL as bech32 with the 'lnurl' prefix. A small helper for servers that want to implement the server-side of the lnurl flow. {lnurl} is the bech32-encoded URL to query.",
+				"Encode an URL into bech32.",
 				"",
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
 					url, _ := params["url"].(string)
@@ -54,6 +54,20 @@ func main() {
 					}
 
 					return map[string]interface{}{"lnurl": encodedlnurl}, 0, nil
+				},
+			}, {
+				"lnurldecode",
+				"lnurl",
+				"Decode a bech32-encoded lnurl into an URL.",
+				"",
+				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
+					lnurltext, _ := params["lnurl"].(string)
+					decodedlnurl, err := lnurl.LNURLDecode(lnurltext)
+					if err != nil {
+						return nil, 500, err
+					}
+
+					return map[string]interface{}{"url": decodedlnurl}, 0, nil
 				},
 			}, {
 				"lnurlinvoice",

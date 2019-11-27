@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/hoisie/mustache"
 	"github.com/lucsky/cuid"
 	"github.com/soudy/mathcat"
@@ -21,31 +21,30 @@ type Template struct {
 	QueryParams  map[string]bool   `json:"query_params,omitempty"`
 	URLParams    []string          `json:"url_params,omitempty"`
 	Metadata     map[string]string `json:"metadata"`
-	PriceSatoshi interface{}       `json:"price_msatoshi,omitempty"`
+	PriceSatoshi interface{}       `json:"price_satoshi,omitempty"`
 	Webhook      string            `json:"webhook"`
 }
 
 func (t *Template) MakeURL(baseURL string, params map[string]string) string {
-	u, _ := url.Parse(baseURL + "/" + t.Id + "/")
-
 	path := make([]string, len(t.URLParams))
 	for i, key := range t.URLParams {
 		value, _ := params[key]
 		path[i] = fmt.Sprint(value)
 	}
-	if len(path) > 0 {
-		u.Path += strings.Join(path, "/")
-	}
 
-	qs := url.Values{}
+	var qs []string
+	var qsencoded string
 	for key, _ := range t.QueryParams {
 		if value, ok := params[key]; ok {
-			qs.Set(key, fmt.Sprint(value))
+			qs = append(qs,
+				fmt.Sprintf("%s=%s", url.QueryEscape(key), url.QueryEscape(value)))
 		}
 	}
-	u.RawQuery = qs.Encode()
+	if len(qs) > 0 {
+		qsencoded = "?" + strings.Join(qs, "&")
+	}
 
-	return u.String()
+	return baseURL + "/" + t.Id + "/" + strings.Join(path, "/") + qsencoded
 }
 
 func FromURL(u *url.URL) (t Template, params map[string]string, err error) {
@@ -81,8 +80,8 @@ func FromURL(u *url.URL) (t Template, params map[string]string, err error) {
 
 	// get params from URL path
 	params = make(map[string]string)
-	for i, value := range spl[3:] {
-		paramName := t.URLParams[i]
+	for i, paramName := range t.URLParams {
+		value := spl[4+i]
 		params[paramName] = value
 	}
 
@@ -101,7 +100,7 @@ func (t *Template) GetInvoice(
 ) (*Invoice, error) {
 	price, err := t.GetInvoicePrice(params)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting price: %w", err)
 	}
 
 	now := time.Now()
@@ -140,30 +139,19 @@ func (t *Template) GetInvoice(
 }
 
 func (t *Template) GetInvoicePrice(params map[string]string) (int64, error) {
-	switch price := t.PriceSatoshi.(type) {
-	case string: // it's a formula
-		m := mathcat.New()
-		for k, v := range params {
-			m.Run(fmt.Sprintf("%s = %v", k, v))
-		}
-		res, err := m.Run(price)
-		if err != nil {
-			return 0, err
-		}
-		satsf, _ := res.Float64()
-		if satsf < 1 {
-			return 0, fmt.Errorf("got invalid price: %v", satsf)
-		}
-		return int64(satsf * 1000), nil
-	case int:
-		return int64(price), nil
-	case float64:
-		return int64(price), nil
-	case int64:
-		return price, nil
-	default:
-		return 0, fmt.Errorf("template has invalid price: %v", t.PriceSatoshi)
+	m := mathcat.New()
+	for k, v := range params {
+		m.Run(fmt.Sprintf("%s = %v", k, v))
 	}
+	res, err := m.Run(fmt.Sprintf("%v", t.PriceSatoshi))
+	if err != nil {
+		return 0, err
+	}
+	satsf, _ := res.Float64()
+	if satsf < 1 {
+		return 0, fmt.Errorf("got invalid price: %v", satsf)
+	}
+	return int64(satsf * 1000), nil
 }
 
 func (t *Template) EncodedMetadata(params map[string]string) string {

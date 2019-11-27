@@ -33,13 +33,14 @@ func Start(p *plugin.Plugin) {
 		}
 	}
 	if len(keys) == 0 {
-		p.Log("no keys set. stopping here.")
+		p.Log("no keys set. not starting lnurl server.")
 		return
 	} else {
 		p.Log("Keys read: ", keys)
 	}
 
 	dbpath := getPath(p, "lnurl-db-path")
+	os.MkdirAll(filepath.Dir(dbpath), os.ModePerm)
 	db, err = buntdb.Open(dbpath)
 	if err != nil {
 		p.Log("failed to open db at " + dbpath + ". stopping here.")
@@ -58,10 +59,11 @@ func Start(p *plugin.Plugin) {
 	router.Use(allJSONMiddleware)
 	router.Use(authMiddleware)
 	router.Path("/templates").Methods("GET").HandlerFunc(listTemplates)
-	router.Path("/template/:id").Methods("PUT").HandlerFunc(setTemplate)
-	router.Path("/template/:id").Methods("GET").HandlerFunc(getTemplate)
-	router.Path("/template/:id/invoices").Methods("GET").HandlerFunc(listInvoices)
-	router.Path("/invoice/:id").Methods("GET").HandlerFunc(getInvoice)
+	router.Path("/template/{id}").Methods("PUT").HandlerFunc(setTemplate)
+	router.Path("/template/{id}").Methods("GET").HandlerFunc(getTemplate)
+	router.Path("/template/{id}/lnurl").Methods("GET").HandlerFunc(getLNURL)
+	router.Path("/template/{id}/invoices").Methods("GET").HandlerFunc(listInvoices)
+	router.Path("/invoice/{id}").Methods("GET").HandlerFunc(getInvoice)
 	router.Path("/sse-stream").Methods("GET").HandlerFunc(payStreamSSE)
 	router.Path("/ws-stream").Methods("GET").HandlerFunc(payStreamWS)
 	router.PathPrefix("/lnurl/params/").Methods("GET").HandlerFunc(lnurlPayParams)
@@ -72,6 +74,11 @@ func Start(p *plugin.Plugin) {
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/lnurl/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if _, key, ok := r.BasicAuth(); ok {
 			if _, ok := keys[key]; ok {
 				next.ServeHTTP(w, r)
@@ -149,7 +156,6 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 		go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
 		listenerr = srv.ListenAndServeTLS("", "")
 	} else {
-		proto := "http"
 		srv := &http.Server{
 			Addr:         host + ":" + port,
 			Handler:      router,

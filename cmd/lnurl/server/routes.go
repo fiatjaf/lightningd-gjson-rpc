@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/fiatjaf/go-lnurl"
@@ -12,7 +13,7 @@ import (
 
 func listTemplates(w http.ResponseWriter, r *http.Request) {
 	db.View(func(tx *buntdb.Tx) error {
-		var list []json.RawMessage
+		list := make([]json.RawMessage, 0)
 		tx.Descend("template/", func(key, value string) bool {
 			list = append(list, json.RawMessage(value))
 			return true
@@ -37,6 +38,7 @@ func setTemplate(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(ErrorResponse{err.Error()})
 			return nil
 		}
+		t.Id = id
 
 		j, _ := json.Marshal(t)
 		tx.Set("template/"+id, string(j), nil)
@@ -56,6 +58,42 @@ func getTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 
 		json.NewEncoder(w).Encode(json.RawMessage(val))
+		return nil
+	})
+}
+
+func getLNURL(w http.ResponseWriter, r *http.Request) {
+	db.View(func(tx *buntdb.Tx) error {
+		id := mux.Vars(r)["id"]
+		val, err := tx.Get("template/" + id)
+		if err != nil {
+			json.NewEncoder(w).Encode(ErrorResponse{id + " template not found"})
+			return nil
+		}
+
+		var t Template
+		err = json.Unmarshal([]byte(val), &t)
+		if err != nil {
+			json.NewEncoder(w).Encode(ErrorResponse{"failed to decode template: " + err.Error()})
+			return nil
+		}
+
+		params := make(map[string]string)
+		for k, v := range r.URL.Query() {
+			params[k] = v[0]
+		}
+
+		url := t.MakeURL(
+			r.Context().Value("serviceURL").(string)+"/lnurl/params",
+			params,
+		)
+		lnurlEncoded, err := lnurl.LNURLEncode(url)
+		if err != nil {
+			json.NewEncoder(w).Encode(ErrorResponse{"failed to encode lnurl: " + err.Error()})
+			return err
+		}
+		fmt.Fprintln(w, lnurlEncoded)
+
 		return nil
 	})
 }
