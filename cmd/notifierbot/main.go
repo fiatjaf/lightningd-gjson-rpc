@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,6 +32,10 @@ func main() {
 			{"notifierbot-token", "string", nil, "Telegram bot token"},
 			{"notifierbot-dbfile", "string", "notifierbot/data.db",
 				"Where we'll store data, path can be relative to lightning-dir"},
+			{"notifierbot-minutes", "int", 30,
+				"For how long we will hold the invoice before failing"},
+			{"notifierbot-extra-fee-per-millionth", "int", 3000,
+				"Fee we will charge for incoming and limit the outgoing payment to."},
 		},
 		Subscriptions: []plugin.Subscription{
 			{
@@ -123,7 +126,6 @@ func main() {
 				return
 			}
 
-			log.Print(updates)
 			for update := range updates {
 				handle(p, update)
 				go db.Update(func(tx *buntdb.Tx) error {

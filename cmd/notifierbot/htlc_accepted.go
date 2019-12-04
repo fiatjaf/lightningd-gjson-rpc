@@ -20,7 +20,7 @@ var failHTLC = map[string]interface{}{"result": "fail", "failure_code": 16399}
   b. notify the user his payment has arrived;
   c. either
     i  wait for the user to say he is online and continue; or
-    ii fail after 30 minutes.
+    ii fail after x minutes.
 2. old, still unprocessed -- in which case we must do
   a. check if we have attempted an outgoing payment for that hash,
     i  if not, then continue with flow 1;
@@ -37,6 +37,8 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 	if !ok {
 		return continueHTLC
 	}
+	holdForMinutes := p.Args.Get("notifierbot-minutes").Int()
+	extraFeePerMillionth := p.Args.Get("notifierbot-extra-fee-per-millionth").Int()
 
 	p.Log("waiting for the bot API to be ok")
 	for {
@@ -60,8 +62,8 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 	// is this an HTLC that's being retried? we should check if we've paid it to someone else
 	// already so we can claim it and don't lose money
 	// ~
-	// actually instead of checking once at the beginning let's rerun this entire flow every 30 minutes
-	// it will be as if lightningd was restarted every 30 minutes and called us again and again
+	// actually instead of checking once at the beginning let's rerun this entire flow every x minutes
+	// it will be as if lightningd was restarted every x minutes and called us again and again
 	wakes, _ := awaken.Sub(context.TODO(), 1)
 	defer awaken.Unsub(wakes)
 	pays, _ := paid.Sub(context.TODO(), 1)
@@ -71,7 +73,7 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 
 	for {
 		// we assign this here to not restart the counter every time the `select` below matches
-		after30min := time.After(30 * time.Minute)
+		afterSomeMinutes := time.After(time.Duration(holdForMinutes) * time.Minute)
 		// but it's still restarted on every loop
 
 		sendpays, err := p.Client.CallNamed("listsendpays", "payment_hash", hash)
@@ -146,15 +148,15 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 		}
 
 	listen:
-		// now we wait until peer is connected to release the HTLC or give up after 30 minutes
+		// now we wait until peer is connected to release the HTLC or give up after x min
 		select {
-		case <-after30min:
+		case <-afterSomeMinutes:
 			if sendingPayment {
 				// never stop here while we're still sending a payment
 				continue
 			}
 
-			p.Logf("30min timeout for HTLC %s. failing.", hash)
+			p.Logf("%dmin timeout for HTLC %s. failing.", holdForMinutes, hash)
 			return failHTLC
 		case tgid := <-wakes:
 			// peer is awaken, so release the payment or do the preimage-fetching gimmick
@@ -165,7 +167,7 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 				}
 
 				p.Logf("peer %d is online. proceeding with HTLC %s.", telegramId, hash)
-				if timeLeft < 32 {
+				if timeLeft < int(holdForMinutes+2) {
 					// too risky, but this should never happen and should always be 288 anyway
 					return failHTLC
 				}
@@ -177,8 +179,8 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 					ok, _, tries, err := p.Client.PayAndWaitUntilResolution(
 						originalbolt11,
 						map[string]interface{}{
-							"exemptfee":     2,
-							"maxfeepercent": 0.3, // because we add 0.3%
+							"exemptfee":     1,
+							"maxfeepercent": extraFeePerMillionth * 1000 / 1000000,
 							"maxdelaytotal": timeLeft - 23,
 						})
 

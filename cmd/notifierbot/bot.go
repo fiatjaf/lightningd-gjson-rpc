@@ -45,6 +45,7 @@ A <i>` + strconv.Itoa(int(msatoshi/1000)) + `</i> payment has arrived for you. T
 }
 
 func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
+	extraFeePerMillionth := p.Args.Get("notifierbot-extra-fee-per-millionth").Int()
 	var telegramId = message.From.ID
 
 	if bolt11, ok := searchForInvoice(message); ok {
@@ -55,7 +56,7 @@ func handleMessage(p *plugin.Plugin, message *tgbotapi.Message) {
 			ParseMode: "HTML",
 		})
 
-		hash, newExpiry, newInvoice, err := makeInvoice(p, bolt11)
+		hash, newExpiry, newInvoice, err := makeInvoice(p, bolt11, extraFeePerMillionth)
 		if err != nil {
 			bot.Send(tgbotapi.MessageConfig{
 				BaseChat:  tgbotapi.BaseChat{ChatID: message.Chat.ID},

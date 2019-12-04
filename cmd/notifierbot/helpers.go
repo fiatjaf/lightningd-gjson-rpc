@@ -65,6 +65,7 @@ func getOnionData(onion interface{}) (nextChannel string, nextAmount int, ok boo
 func makeInvoice(
 	p *plugin.Plugin,
 	originalInvoice string,
+	extraFeePerMillionth int64,
 ) (hash string, newExpiry int64, newInvoice string, err error) {
 	// parse public key
 	nodeid := info.Get("id").String()
@@ -142,8 +143,8 @@ func makeInvoice(
 	hophint := zpay32.HopHint{
 		NodeID:                    pubkey,
 		ChannelID:                 uint64(channelid),
-		FeeBaseMSat:               0,
-		FeeProportionalMillionths: 3000,
+		FeeBaseMSat:               1,
+		FeeProportionalMillionths: uint32(extraFeePerMillionth),
 		CLTVExpiryDelta:           288,
 	}
 
