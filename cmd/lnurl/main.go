@@ -27,11 +27,12 @@ func main() {
 		Name:    "lnurl",
 		Version: "v1.0",
 		Options: []plugin.Option{
-			{"lnurl-host", "string", "127.0.0.1", "http(s) lnurl server listen address"},
+			{"lnurl-host", "string", "127.0.0.1", "lnurl server listen address"},
 			{"lnurl-port", "string", server.DEFAULTPORT, "http(s) lnurl server port"},
 			{"lnurl-keys", "string", nil, "semicolon-separated list of API keys for lnurl server"},
 			{"lnurl-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for the lnurl server TLS (relative to your lightning directory)"},
 			{"lnurl-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
+			{"lnurl-domain", "string", nil, "public domain to which the lnurls will point. Also used for LetsEncrypt. Defaults to lnurl-host + lnurl-port."},
 			{"lnurl-db-path", "string", "lnurl/server.db", "path to store your lnurl server database (relative to your lightning directory)"},
 			{"lnurl-hmac-key", "string", nil, "a random string to serve as the hmac secret, defaults to a key derived from hsm_secret."},
 		},

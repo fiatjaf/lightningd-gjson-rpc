@@ -2,16 +2,18 @@ package server
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 	"github.com/hoisie/mustache"
 	"github.com/lucsky/cuid"
 	"github.com/soudy/mathcat"
@@ -19,20 +21,21 @@ import (
 )
 
 type Template struct {
-	Id           string            `json:"id"`
-	QueryParams  map[string]bool   `json:"query_params,omitempty"`
-	URLParams    []string          `json:"url_params,omitempty"`
-	Metadata     map[string]string `json:"metadata"`
-	PriceSatoshi interface{}       `json:"price_satoshi,omitempty"`
-	Webhook      string            `json:"webhook"`
+	Id            string            `json:"id"`
+	PathParams    []string          `json:"path_params,omitempty"`
+	QueryParams   map[string]bool   `json:"query_params,omitempty"`
+	Metadata      map[string]string `json:"metadata"`
+	PriceSatoshi  interface{}       `json:"price_satoshi"`
+	Webhook       string            `json:"webhook"`
+	SecretCodeKey string            `json:"secret_code_key,omitempty"`
 }
 
 func (t *Template) MakeURL(baseURL string, hmacKey []byte, params map[string]string) string {
 	u, _ := url.Parse(baseURL + "/" + t.Id + "/")
 
 	// add path params
-	path := make([]string, len(t.URLParams))
-	for i, key := range t.URLParams {
+	path := make([]string, len(t.PathParams))
+	for i, key := range t.PathParams {
 		value, _ := params[key]
 		path[i] = fmt.Sprint(value)
 	}
@@ -91,7 +94,7 @@ func FromURL(u *url.URL, hmacKey []byte) (t Template, params map[string]string, 
 
 	// get params from URL path
 	params = make(map[string]string)
-	for i, paramName := range t.URLParams {
+	for i, paramName := range t.PathParams {
 		value := spl[4+i]
 		params[paramName] = value
 	}
@@ -116,9 +119,9 @@ func FromURL(u *url.URL, hmacKey []byte) (t Template, params map[string]string, 
 }
 
 func (t *Template) GetInvoice(
-	client *lightning.Client,
+	p *plugin.Plugin,
 	params map[string]string,
-) (*Invoice, error) {
+) (invoice *Invoice, err error) {
 	price, err := t.GetInvoicePrice(params)
 	if err != nil {
 		return nil, fmt.Errorf("error getting price: %w", err)
@@ -126,7 +129,7 @@ func (t *Template) GetInvoice(
 
 	now := time.Now()
 
-	invoice := Invoice{
+	invoice = &Invoice{
 		Id:        cuid.Slug(),
 		Template:  t.Id,
 		Params:    params,
@@ -137,8 +140,14 @@ func (t *Template) GetInvoice(
 
 	metadataHash := sha256.Sum256([]byte(t.EncodedMetadata(params)))
 	expirySeconds := 3600
+	preimage := make([]byte, 32)
+	if _, err = io.ReadFull(rand.Reader, preimage); err != nil {
+		return nil, err
+	}
+	preimageStr := hex.EncodeToString(preimage)
 
-	inv, err := client.CallNamed("lnurlinvoice",
+	inv, err := p.Client.CallNamed("lnurlinvoice",
+		"preimage", preimageStr,
 		"msatoshi", invoice.Msatoshi,
 		"label", "lnurl/"+invoice.Id,
 		"description_hash", hex.EncodeToString(metadataHash[:]),
@@ -147,6 +156,7 @@ func (t *Template) GetInvoice(
 	if err != nil {
 		return nil, err
 	}
+	invoice.Preimage = preimageStr
 	invoice.Bolt11 = inv.Get("bolt11").String()
 
 	db.Update(func(tx *buntdb.Tx) error {
@@ -156,7 +166,7 @@ func (t *Template) GetInvoice(
 		return nil
 	})
 
-	return &invoice, nil
+	return invoice, nil
 }
 
 func (t *Template) GetInvoicePrice(params map[string]string) (int64, error) {
@@ -190,6 +200,7 @@ type Invoice struct {
 	Template  string            `json:"template"`
 	Params    map[string]string `json:"params"`
 	Msatoshi  int64             `json:"msatoshi"`
+	Preimage  string            `json:"preimage"`
 	Bolt11    string            `json:"bolt11"`
 	Paid      bool              `json:"paid"`
 	CreatedAt *time.Time        `json:"created_at"`

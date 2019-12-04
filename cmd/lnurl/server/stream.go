@@ -20,6 +20,7 @@ var payment = caster.New(context.TODO())
 func GotPayment(p *plugin.Plugin, params plugin.Params) {
 	label := params["invoice_payment"].(map[string]interface{})["label"].(string)
 	if strings.HasPrefix(label, "lnurl/") {
+		p.Logf("got payment %s", label)
 		payment.TryPub(label)
 	}
 }

@@ -1,12 +1,13 @@
 package server
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/fiatjaf/go-lnurl"
-	"github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 	"github.com/gorilla/mux"
 	"github.com/tidwall/buntdb"
 )
@@ -14,7 +15,7 @@ import (
 func listTemplates(w http.ResponseWriter, r *http.Request) {
 	db.View(func(tx *buntdb.Tx) error {
 		list := make([]json.RawMessage, 0)
-		tx.Descend("template/", func(key, value string) bool {
+		tx.AscendRange("", "template/", "template~", func(key, value string) bool {
 			list = append(list, json.RawMessage(value))
 			return true
 		})
@@ -42,8 +43,21 @@ func setTemplate(w http.ResponseWriter, r *http.Request) {
 
 		j, _ := json.Marshal(t)
 		tx.Set("template/"+id, string(j), nil)
+		p := r.Context().Value("plugin").(*plugin.Plugin)
+		p.Logf("saving template %s", id)
 
 		json.NewEncoder(w).Encode(t)
+		return nil
+	})
+}
+
+func deleteTemplate(w http.ResponseWriter, r *http.Request) {
+	db.Update(func(tx *buntdb.Tx) error {
+		id := mux.Vars(r)["id"]
+		tx.Delete("template/" + id)
+		p := r.Context().Value("plugin").(*plugin.Plugin)
+		p.Logf("deleting template %s", id)
+		json.NewEncoder(w).Encode(true)
 		return nil
 	})
 }
@@ -103,10 +117,13 @@ func listInvoices(w http.ResponseWriter, r *http.Request) {
 	db.View(func(tx *buntdb.Tx) error {
 		id := mux.Vars(r)["id"]
 		var list []json.RawMessage
-		tx.Descend("template/"+id+"/invoice/", func(key, value string) bool {
-			list = append(list, json.RawMessage(value))
-			return true
-		})
+		tx.AscendRange("",
+			"template/"+id+"/invoice/",
+			"template/"+id+"/invoice~",
+			func(key, value string) bool {
+				list = append(list, json.RawMessage(value))
+				return true
+			})
 		json.NewEncoder(w).Encode(list)
 		return nil
 	})
@@ -144,6 +161,9 @@ func lnurlPayParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	p := r.Context().Value("plugin").(*plugin.Plugin)
+	p.Logf("responding lnurl-pay 1st call on template %s, price: %d", t.Id, price)
+
 	serviceURL := r.Context().Value("serviceURL").(string)
 	json.NewEncoder(w).Encode(lnurl.LNURLPayResponse1{
 		Tag: "payRequest",
@@ -165,17 +185,28 @@ func lnurlPayValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := r.Context().Value("client").(*lightning.Client)
-	invoice, err := t.GetInvoice(client, params)
+	p := r.Context().Value("plugin").(*plugin.Plugin)
+	invoice, err := t.GetInvoice(p, params)
 	if err != nil {
 		json.NewEncoder(w).Encode(lnurl.ErrorResponse("failed to generate invoice: " + err.Error()))
 		return
 	}
 
-	r.Header.Set("X-Invoice-Id", invoice.Id)
+	// if a secret_code_key is in this template use it to create an hmac-code
+	// code is a small confirmation code intented only for face-to-face interactions
+	var sa *lnurl.SuccessAction
+	if t.SecretCodeKey != "" {
+		code := generateCode(&t, invoice)
+		preimage, _ := hex.DecodeString(invoice.Preimage)
+		sa, _ = lnurl.AESAction("CODE", preimage, code)
+	}
 
+	p.Logf("responding lnurl-pay 2nd call on template %s", t.Id)
+
+	r.Header.Set("X-Invoice-Id", invoice.Id)
 	json.NewEncoder(w).Encode(lnurl.LNURLPayResponse2{
-		Routes: make([][]lnurl.RouteInfo, 0),
-		PR:     invoice.Bolt11,
+		Routes:        make([][]lnurl.RouteInfo, 0),
+		PR:            invoice.Bolt11,
+		SuccessAction: sa,
 	})
 }

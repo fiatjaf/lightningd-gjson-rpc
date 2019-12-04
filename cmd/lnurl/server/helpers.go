@@ -1,10 +1,15 @@
 package server
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
-	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 )
 
@@ -33,4 +38,11 @@ func getDefaultHMACKey(client *lightning.Client) []byte {
 		panic("couldn't get key from hsm_secret! please set manually.")
 	}
 	return key
+}
+
+func generateCode(template *Template, inv *Invoice) string {
+	now5min := time.Now().Unix() / (60 * 5)
+	h := hmac.New(sha256.New, []byte(template.SecretCodeKey))
+	h.Write([]byte(strconv.FormatInt(now5min, 10)))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))[:6]
 }

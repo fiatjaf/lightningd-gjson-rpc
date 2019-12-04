@@ -60,6 +60,7 @@ func Start(p *plugin.Plugin) {
 	router.Use(authMiddleware)
 	router.Path("/templates").Methods("GET").HandlerFunc(listTemplates)
 	router.Path("/template/{id}").Methods("PUT").HandlerFunc(setTemplate)
+	router.Path("/template/{id}").Methods("DELETE").HandlerFunc(deleteTemplate)
 	router.Path("/template/{id}").Methods("GET").HandlerFunc(getTemplate)
 	router.Path("/template/{id}/lnurl").Methods("GET").HandlerFunc(getLNURL)
 	router.Path("/template/{id}/invoices").Methods("GET").HandlerFunc(listInvoices)
@@ -105,6 +106,10 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 	port, _ := p.Args.String("lnurl-port")
 	letsemail, _ := p.Args.String("lnurl-letsencrypt-email")
 	tlspath := getPath(p, "lnurl-tls-path")
+	domain, _ := p.Args.String("lnurl-domain")
+	if domain == "" {
+		domain = host + ":" + port
+	}
 
 	hmacKeyStr, _ := p.Args.String("lnurl-hmac-key")
 	var hmacKey []byte
@@ -122,7 +127,7 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 					context.Background(),
 					"hmacKey", hmacKey,
 				),
-				"client", p.Client,
+				"plugin", p,
 			),
 			"serviceURL", serviceURL,
 		)
@@ -130,8 +135,8 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 
 	var listenerr error
 	if letsemail != "" {
-		if len(strings.Split(host, ".")) == 4 && len(host) <= 15 {
-			p.Log("when using letsencrypt `lnurl-host` must be a domain, not IP")
+		if domain == "" || (len(strings.Split(domain, ".")) == 4 && len(domain) <= 15) {
+			p.Log("when using letsencrypt specify `lnurl-domain`")
 			return
 		}
 		if port != DEFAULTPORT {
@@ -162,8 +167,9 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 		}
 
-		p.Log("HTTPS server on https://" + host + "/")
-		serviceURL = "https://" + host
+		p.Log("HTTPS server on https://" + srv.Addr + "/")
+		serviceURL = "https://" + domain
+		p.Logf("lnurls based on %s", serviceURL)
 		go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
 		listenerr = srv.ListenAndServeTLS("", "")
 	} else {
@@ -181,11 +187,13 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 			}
 
 			p.Log("HTTPS server on https://" + srv.Addr + "/")
-			serviceURL = "https://" + host + ":" + port
+			serviceURL = "https://" + domain
+			p.Logf("lnurls based on %s", serviceURL)
 			listenerr = srv.ListenAndServeTLS(path.Join(tlspath, "cert.pem"), path.Join(tlspath, "key.pem"))
 		} else {
 			p.Log("HTTP server on http://" + srv.Addr + "/")
-			serviceURL = "http://" + host + ":" + port
+			serviceURL = "https://" + domain
+			p.Logf("lnurls based on %s", serviceURL)
 			listenerr = srv.ListenAndServe()
 		}
 	}
