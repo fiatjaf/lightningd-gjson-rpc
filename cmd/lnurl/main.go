@@ -363,7 +363,7 @@ func callCallback(
 	}
 
 	if lnurlresp.Status == "ERROR" {
-		return nil, 206, err
+		return nil, 206, errors.New(lnurlresp.Reason)
 	}
 
 	return jsonresponsesuccess, 0, nil

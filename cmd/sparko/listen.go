@@ -20,12 +20,12 @@ func listen(p *plugin.Plugin, router *mux.Router) {
 	port, _ := p.Args.String("sparko-port")
 	letsemail, _ := p.Args.String("sparko-letsencrypt-email")
 	tlspath := ""
-	if giventtlspath, err := p.Args.String("sparko-tls-path"); err == nil {
-		if !filepath.IsAbs(giventtlspath) {
+	if giventlspath, err := p.Args.String("sparko-tls-path"); err == nil {
+		if !filepath.IsAbs(giventlspath) {
 			// expand tlspath from lightning dir
-			tlspath = filepath.Join(filepath.Dir(p.Client.Path), tlspath)
+			tlspath = filepath.Join(filepath.Dir(p.Client.Path), giventlspath)
 		} else {
-			tlspath = giventtlspath
+			tlspath = giventlspath
 		}
 	}
 

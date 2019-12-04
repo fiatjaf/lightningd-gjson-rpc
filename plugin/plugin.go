@@ -1,10 +1,11 @@
 package plugin
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 
@@ -74,6 +75,21 @@ func (p *Plugin) Run() {
 	p.Listener(initialized)
 }
 
+func (p *Plugin) colorize(text string) string {
+	h := sha256.Sum256([]byte(p.Name))
+	n := binary.BigEndian.Uint64(h[:])
+	colors := []string{
+		"\x1B[01;91m",
+		"\x1B[01;92m",
+		"\x1B[01;93m",
+		"\x1B[01;94m",
+		"\x1B[01;95m",
+		"\x1B[01;96m",
+		"\x1B[01;97m",
+	}
+	return colors[n%uint64(len(colors))] + text + "\x1B[0m"
+}
+
 var rpcmethodmap = make(map[string]RPCMethod)
 var submap = make(map[string]Subscription)
 var hookmap = make(map[string]Hook)
@@ -89,13 +105,14 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 		hookmap[hook.Type] = hook
 	}
 
+	// logging
+	prefix := p.colorize("plugin-" + p.Name)
 	p.Log = func(args ...interface{}) {
-		args = append([]interface{}{"plugin-", p.Name, " "}, args...)
-		log.Print(args...)
+		args = append([]interface{}{prefix + " "}, args...)
+		fmt.Fprintln(os.Stderr, args...)
 	}
 	p.Logf = func(b string, args ...interface{}) {
-		str := "plugin-" + p.Name + " " + fmt.Sprintf(b, args...)
-		log.Print(str)
+		fmt.Fprintf(os.Stderr, prefix+" "+b+"\n", args...)
 	}
 
 	var msg lightning.JSONRPCMessage
