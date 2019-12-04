@@ -7,9 +7,15 @@ import (
 	"strings"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc"
+	"github.com/tidwall/gjson"
 )
 
 type Params map[string]interface{}
+
+func (params Params) Get(path string) gjson.Result {
+	j, _ := json.Marshal(params)
+	return gjson.GetBytes(j, path)
+}
 
 func (params Params) String(key string) (s string, err error) {
 	v, ok := params[key]
