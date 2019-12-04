@@ -109,25 +109,40 @@ func GetParams(msg lightning.JSONRPCMessage, usage string) (params Params, err e
 		}
 	}
 
+	lastvariadic := false
+	klen := len(keys)
+	lastkey := keys[klen-1]
+	if strings.HasSuffix(lastkey, "...") {
+		lastvariadic = true
+		keys[klen-1] = lastkey[:len(lastkey)-3]
+	}
+
 	params = make(map[string]interface{})
 	switch p := msg.Params.(type) {
 	case []interface{}:
 		for i, v := range p {
-			if i < len(keys) { // ignore extra parameters
 
-				// try to parse json if it's not json yet (if used through he cli, for ex)
-				var value interface{}
-				switch strv := v.(type) {
-				case string:
-					err := json.Unmarshal([]byte(strv), &value)
-					if err != nil {
-						value = strv
-					}
-				default:
-					value = v
+			// try to parse json if it's not json yet (if used through he cli, for ex)
+			var value interface{}
+			switch strv := v.(type) {
+			case string:
+				err := json.Unmarshal([]byte(strv), &value)
+				if err != nil {
+					value = strv
 				}
+			default:
+				value = v
+			}
 
+			if i < klen-1 {
 				params[keys[i]] = value
+			} else if i == klen-1 {
+				if lastvariadic {
+					value = []interface{}{value}
+				}
+				params[keys[i]] = value
+			} else if lastvariadic {
+				params[lastkey] = append(params[lastkey].([]interface{}), value)
 			}
 		}
 	case map[string]interface{}:
