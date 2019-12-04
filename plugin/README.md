@@ -18,7 +18,7 @@ To instantiate your `Plugin` struct you'll need some values:
 * `Hooks`: A list of [hook](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc/plugin#Hook) names and handler functions.
 * `OnInit`: A function to run after the plugin has initialized. It will have access to the plugin struct (as a parameter) and you can do odd stuff here, like start a webserver or just do one-off things.
 
-From inside the functions and handlers you'll have access to a `plugin.Plugin` struct with `Args`, the set of options passed to the plugins from lightningd initialization; `Log` and `Logf`, basic logging functions that will print a line to the lightningd logs prefixed with your colorized plugin name; and `Client`, a [lightningd-gjson-rpc](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client) client you can use to call methods on lightningd.
+From inside the functions and handlers you'll have access to a `plugin.Plugin` struct with `Args`, the set of options passed to the plugins from lightningd initialization; `Log` and `Logf`, basic logging functions that will print a line to the lightningd logs prefixed with your plugin name; and `Client`, a [lightningd-gjson-rpc](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client) client you can use to call methods on lightningd.
 
 With the above, the [![godoc reference](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc/plugin) and the [Plugins docs](https://lightning.readthedocs.io/PLUGINS.html#hooks) you'll be able to make any plugin you want.
 
@@ -30,16 +30,35 @@ package main
 import "github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 
 func main() {
-    http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
     p := plugin.Plugin{
         Name: "useless",
         Version: "v1.0"
         Options: []plugin.Option{
             {
-                Name: "payment-adjective",
-                Type: "string",
-                Description: "How do you want your payments to be called.",
+                 "payment-adjective",
+                 "string",
+                 "How do you want your payments to be called.",
+            },
+        },
+        RPCMethods: []plugin.RPCMethod{
+            {
+                "donothing",
+                "arg1 [arg2]",
+                "does nothing with {arg1} and optional {arg2}.",
+                "",
+                func (p *plugin.Plugin, params Params) (interface{}, int, error) {
+                    arg1 := params.Get("arg1").String()
+                    arg2 := params.Get("arg2").String()
+
+                    if arg2 != "" && arg2 != arg1 {
+                        return nil, -1, errors.New("arg2 is not equal to arg1!")
+                    }
+
+                    return map[string]interface{}{
+                        "arg1": arg1,
+                        "arg2": arg2,
+                    }, 0, nil
+                },
             },
         },
         Subscriptions: []plugin.Subscription{
@@ -55,7 +74,7 @@ func main() {
         Hooks: []plugin.Hook{
             {
                 "htlc_accepted",
-				func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
+                func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
                     // hold the invoice just because you want lightning to fail
                     time.Sleep(30 * time.Minute)
                     return map[string]interface{}{"result": "continue"}
@@ -70,3 +89,9 @@ func main() {
     p.Run()
 }
 ```
+
+## Also
+
+We have colored logs!
+
+![](screenshot.png)
