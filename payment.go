@@ -77,26 +77,26 @@ func (ln *Client) PayAndWaitUntilResolution(
 	routehints := decoded.Get("routes").Array()
 	if len(routehints) > 0 {
 		for _, rh := range routehints {
-			done, payment := tryPayment(
+			paid, payment := tryPayment(
 				ln, startTime, &tries, bolt11,
 				payee, msatoshi, hash, label, &exclude,
 				delayFinalHop, riskfactor,
 				maxfeepercent, exemptfee, maxdelaytotal,
 				&rh)
-			if done {
+			if paid {
 				return true, payment, tries, nil
 			}
 		}
 	}
 
 	// if none of the hints aided, try it without hints
-	done, payment := tryPayment(
+	paid, payment := tryPayment(
 		ln, startTime, &tries, bolt11,
 		payee, msatoshi, hash, label, &exclude,
 		delayFinalHop, riskfactor,
 		maxfeepercent, exemptfee, maxdelaytotal,
 		nil)
-	if done {
+	if paid {
 		return true, payment, tries, nil
 	}
 
@@ -141,12 +141,13 @@ func tryPayment(
 			"exclude", *exclude,
 		)
 		if err != nil {
-			// no route or invalid parameters, call it a simple failure
+			// can't get route, fail all
 			return
 		}
 
 		if !res.Get("route").Exists() {
-			continue
+			// can't get route, fail all
+			return
 		}
 
 		route := res.Get("route")
@@ -174,9 +175,8 @@ func tryPayment(
 			continue
 		}
 
-		// ignore returned value here as we'll get it from waitsendpay below
 		var cmderrData map[string]interface{}
-		_, err = ln.CallNamed("sendpay",
+		_, err = ln.CallNamedWithCustomTimeout(WaitSendPayTimeout, "sendpay",
 			"route", route.Value(),
 			"payment_hash", hash,
 			"label", label,
@@ -194,13 +194,16 @@ func tryPayment(
 						return
 					}
 					goto retry
-				case 201, 202, 203:
-					// hash already used, bad onion or permanent failure
+				case 201:
+					// already paid this hash
+					return
+				case 202, 203:
+					// bad onion or permanent failure
 					return
 				}
 			} else {
 				// otherwise it's a different odd error, stop
-				return
+				panic("unexpected error! " + err.Error())
 			}
 		}
 
@@ -221,14 +224,14 @@ func tryPayment(
 					cmderrData, ok = cmderr.Data.(map[string]interface{})
 					if !ok {
 						// shouldn't happen
-						return
+						continue
 					}
 					goto retry
 				}
 
-				// a different error, call it a complete failure
-				return
 			}
+
+			panic("unexpected error! " + err.Error())
 		}
 
 		// payment suceeded
@@ -242,14 +245,14 @@ func tryPayment(
 
 		if !ok1 || !ok2 {
 			// should never happen
-			return
+			continue
 		}
 
 		// if erring channel is in the route hint just stop altogether
 		if hint != nil {
 			for _, hhop := range hint.Array() {
 				if hhop.Get("short_channel_id").String() == channel {
-					return
+					continue
 				}
 			}
 		}
