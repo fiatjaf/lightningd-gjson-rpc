@@ -186,12 +186,15 @@ func (t *Template) GetInvoicePrice(params map[string]string) (int64, error) {
 }
 
 func (t *Template) EncodedMetadata(params map[string]string) string {
-	plain := t.Metadata["text/plain"]
-	rendered := mustache.Render(plain, params)
+	kv := make([][]string, 0, 1)
 
-	j, _ := json.Marshal([][]string{
-		{"text/plain", rendered},
-	})
+	for typ, tmpl := range t.Metadata {
+		rendered := mustache.Render(tmpl, params)
+		kv = append(kv, []string{typ, rendered})
+	}
+
+	j, _ := json.Marshal(kv)
+
 	return string(j)
 }
 
