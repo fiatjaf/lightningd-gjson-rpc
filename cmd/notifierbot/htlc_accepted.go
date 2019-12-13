@@ -40,7 +40,6 @@ func htlc_accepted(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
 	holdForMinutes := p.Args.Get("notifierbot-minutes").Int()
 	extraFeePerMillionth := p.Args.Get("notifierbot-extra-fee-per-millionth").Int()
 
-	p.Log("waiting for the bot API to be ok")
 	for {
 		if bot == nil {
 			time.Sleep(1 * time.Second)

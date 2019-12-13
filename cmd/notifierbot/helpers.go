@@ -145,7 +145,7 @@ func makeInvoice(
 		ChannelID:                 uint64(channelid),
 		FeeBaseMSat:               1,
 		FeeProportionalMillionths: uint32(extraFeePerMillionth),
-		CLTVExpiryDelta:           288,
+		CLTVExpiryDelta:           576,
 	}
 
 	// make the encoded invoice
