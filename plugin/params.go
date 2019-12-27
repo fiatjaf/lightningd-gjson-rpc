@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fiatjaf/lightningd-gjson-rpc"
+	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/tidwall/gjson"
 )
 
@@ -97,6 +97,11 @@ func errType(key string) error {
 }
 
 func GetParams(msg lightning.JSONRPCMessage, usage string) (params Params, err error) {
+	usage = strings.TrimSpace(usage)
+	if usage == "" {
+		return
+	}
+
 	keys := strings.Split(usage, " ")
 	requiredness := make([]bool, len(keys))
 

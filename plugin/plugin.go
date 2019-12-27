@@ -9,7 +9,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/fiatjaf/lightningd-gjson-rpc"
+	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 )
 
 type Plugin struct {
@@ -185,6 +185,7 @@ func handleMessage(p *Plugin, outgoing *json.Encoder, msg lightning.JSONRPCMessa
 	if rpcmethod, ok := rpcmethodmap[msg.Method]; ok {
 		params, err := GetParams(msg, rpcmethod.Usage)
 		if err != nil {
+			p.Logf("Error decoding params '%s': %s", rpcmethod.Usage, err.Error())
 			response.Error = &lightning.JSONRPCError{
 				Code:    400,
 				Message: "Error decoding params: " + rpcmethod.Usage,
