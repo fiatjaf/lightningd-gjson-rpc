@@ -13,9 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/fiatjaf/go-lnurl"
-	"github.com/fiatjaf/lightningd-gjson-rpc/cmd/lnurl/server"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
-	"github.com/fiatjaf/ln-decodepay"
 	"github.com/tidwall/gjson"
 )
 
@@ -26,22 +24,6 @@ func main() {
 	p := plugin.Plugin{
 		Name:    "lnurl",
 		Version: "v1.0",
-		Options: []plugin.Option{
-			{"lnurl-host", "string", "127.0.0.1", "lnurl server listen address"},
-			{"lnurl-port", "string", server.DEFAULTPORT, "http(s) lnurl server port"},
-			{"lnurl-keys", "string", nil, "semicolon-separated list of API keys for lnurl server"},
-			{"lnurl-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for the lnurl server TLS (relative to your lightning directory)"},
-			{"lnurl-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
-			{"lnurl-domain", "string", nil, "public domain to which the lnurls will point. Also used for LetsEncrypt. Defaults to lnurl-host + lnurl-port."},
-			{"lnurl-db-path", "string", "lnurl/server.db", "path to store your lnurl server database (relative to your lightning directory)"},
-			{"lnurl-hmac-key", "string", nil, "a random string to serve as the hmac secret, defaults to a key derived from hsm_secret."},
-		},
-		Subscriptions: []plugin.Subscription{
-			{
-				"invoice_payment",
-				server.GotPayment,
-			},
-		},
 		RPCMethods: []plugin.RPCMethod{
 			{
 				"lnurlencode",
@@ -115,7 +97,7 @@ func main() {
 						&dexpiry,
 					)
 					if err != nil {
-						return nil, 500, errors.New("error making invoice on lightningd")
+						return nil, 500, errors.New("error making invoice on lightningd: " + err.Error())
 					}
 
 					return map[string]interface{}{
@@ -124,19 +106,6 @@ func main() {
 						"preimage":         preimage,
 						"expires_at":       time.Now().Add(dexpiry).Unix(),
 					}, 0, nil
-				},
-			}, {
-				"lnurldecodepay",
-				"bolt11",
-				"(Hopefully) the same as decodepay, but without checking description_hash",
-				"",
-				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
-					bolt11, _ := params.String("bolt11")
-					decoded, err := decodepay.Decodepay(bolt11)
-					if err != nil {
-						return nil, -1, err
-					}
-					return decoded, 0, nil
 				},
 			}, {
 				"lnurlparams",
@@ -325,7 +294,6 @@ func main() {
 				},
 			},
 		},
-		OnInit: server.Start,
 	}
 
 	p.Run()
