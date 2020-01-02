@@ -9,5 +9,5 @@ sparko: $(shell find . -name "*.go") spark-wallet/client/dist
 
 spark-wallet/client/dist: $(shell find spark-wallet/client/src)
 	git submodule update
-	cd spark-wallet/client && pnpm install --shamefully-flatten --prefer-offline
-	cd spark-wallet/client && npm run dist
+	cd spark-wallet/client/ && npm install
+	cd spark-wallet/client && PATH=$$PATH:./node_modules/.bin/ ./build.sh
