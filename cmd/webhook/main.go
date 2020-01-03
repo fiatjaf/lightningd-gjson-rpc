@@ -48,11 +48,7 @@ func subscription(kind string) plugin.Subscription {
 		kind,
 		func(p *plugin.Plugin, params plugin.Params) {
 			var payload interface{}
-			if kind == "connect" || kind == "disconnect" {
-				payload = params
-			} else {
-				payload = params[kind]
-			}
+			payload = params
 
 			urldata, _ := p.Args.String("webhook")
 			if urldata != "" {

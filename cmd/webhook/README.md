@@ -28,12 +28,20 @@ You can opt to receive only `payment`, `invoice` or `forward` events. To filter 
 
 ### Example
 
-In my example configuration I have written the following line in `~/.lightning/config`:
+With the following line in `~/.lightning/config`:
 
 ```
-webhook=https://fiatjaf.free.beeceptor.com/all,https://fiatjaf.free.beeceptor.com/justpayments?filter-event=sendpay_success,https://fiatjaf.free.beeceptor.com/invoices/and/forwards?filter-event=invoice&filter-event=forward_event
+webhook=https://myurl.com/myhandler?filter-event=invoice_payment
 ```
 
-Then I got these events at [Beeceptor](https://beeceptor.com/):
+You'll get payloads like these:
 
-![](screenshot.png)
+```json
+{
+  "invoice_payment": {
+    "label": "unique-label-for-invoice",
+    "preimage": "0000000000000000000000000000000000000000000000000000000000000000",
+    "msat": "10000msat"
+  }
+}
+```
