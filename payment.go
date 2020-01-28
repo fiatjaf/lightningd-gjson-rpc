@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fiatjaf/ln-decodepay/gjson"
+	decodepay_gjson "github.com/fiatjaf/ln-decodepay/gjson"
 	"github.com/tidwall/gjson"
 )
 
 var WaitSendPayTimeout = time.Hour * 24 * 30
-var WaitPaymentMaxAttempts = 60
+var WaitPaymentMaxAttempts = 15
 
 // PayAndWaitUntilResolution implements its 'pay' logic, querying and retrying routes.
 // It's like the default 'pay' plugin, but it blocks until a final success or failure is achieved.
@@ -121,7 +121,7 @@ func tryPayment(
 	maxdelaytotal int,
 	hint *gjson.Result,
 ) (paid bool, payment gjson.Result) {
-	for try := 0; try < 40; try++ {
+	for try := 0; try < WaitPaymentMaxAttempts; try++ {
 		if !time.Now().Before(startTime.Add(5 * time.Minute)) {
 			// if a previous try (or sum of tries) was pending for more than 5 minutes we won't try anything after
 			return

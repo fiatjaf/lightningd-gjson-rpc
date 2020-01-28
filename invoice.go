@@ -80,5 +80,6 @@ func (ln *Client) InvoiceWithDescriptionHash(
 			return btcec.SignCompact(btcec.S256(), privKey, hash, true)
 		},
 	})
+
 	return
 }
