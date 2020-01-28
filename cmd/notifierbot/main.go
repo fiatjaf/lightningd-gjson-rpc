@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/guiguan/caster"
 	"github.com/tidwall/buntdb"
 	"github.com/tidwall/gjson"

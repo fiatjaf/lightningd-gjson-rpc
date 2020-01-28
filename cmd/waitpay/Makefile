@@ -1,3 +1,3 @@
 dist: $(shell find . -name "*.go")
 	mkdir -p dist
-	gox -tags="full" -osarch="darwin/amd64 linux/386 linux/amd64 linux/arm freebsd/amd64" -output="dist/waitpay_{{.OS}}_{{.Arch}}"
+	gox -ldflags="-s -w" -tags="full" -osarch="darwin/amd64 linux/386 linux/amd64 linux/arm freebsd/amd64" -output="dist/waitpay_{{.OS}}_{{.Arch}}"
