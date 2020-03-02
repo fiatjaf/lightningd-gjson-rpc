@@ -39,3 +39,13 @@ func asByte32(hexstr string) (res [32]byte, err error) {
 	}
 	return as32(v), nil
 }
+
+func hasTLVOnionFeature(featurehex string) bool {
+	features, err := strconv.ParseInt(featurehex, 16, 64)
+	if err != nil {
+		return false
+	}
+
+	and := 515 & features
+	return and == 513 || and == 514
+}
