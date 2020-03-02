@@ -294,66 +294,6 @@ func main() {
 				},
 			},
 		},
-		Hooks: []plugin.Hook{
-			{
-				// a dirty hack to make spark-wallet pay to lnurl-pay endpoints
-				"rpc_command",
-				func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
-					data := params.Get("rpc_command.rpc_command")
-
-					switch data.Get("method").String() {
-					case "decodepay":
-						lnurltext, ok := lnurl.FindLNURLInText(
-							data.Get("params.bolt11").String())
-						if !ok {
-							return map[string]interface{}{"continue": true}
-						}
-
-						// it's an lnurl
-						iparams, err := lnurl.HandleLNURL(lnurltext)
-						if err != nil {
-							return map[string]interface{}{"continue": true}
-						}
-
-						params, ok := iparams.(lnurl.LNURLPayResponse1)
-						if !ok {
-							return map[string]interface{}{"continue": true}
-						}
-
-						urlp, err := url.Parse(params.Callback)
-						if err != nil {
-							return map[string]interface{}{"continue": true}
-						}
-
-						decoded := map[string]interface{}{
-							"currency":   "bc",
-							"created_at": time.Now().Unix(),
-							"expiry":     1800,
-							"description": "from " + urlp.Host + " \n\n" +
-								params.ParsedMetadata["text/plain"],
-						}
-
-						if params.MinSendable == params.MaxSendable {
-							decoded["msatoshi"] = params.MinSendable
-						} else {
-							decoded["description"] = decoded["description"].(string) +
-								fmt.Sprintf(
-									" \n\n(between %d and %d)",
-									int64(params.MinSendable), int64(params.MaxSendable))
-						}
-
-						return map[string]interface{}{
-							"return": map[string]interface{}{
-								"result": decoded,
-							},
-						}
-					case "pay":
-					}
-
-					return map[string]interface{}{"continue": true}
-				},
-			},
-		},
 		Dynamic: true,
 	}
 
