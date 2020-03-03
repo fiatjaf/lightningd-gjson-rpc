@@ -52,7 +52,6 @@ func (g *Graph) Edge(x, y int64) graph.Edge {
 	if channel, ok := g.channelMap[g.nodeMapIdx[x].Id][g.nodeMapIdx[y].Id]; ok {
 		// return false if maxhtlc/minhtlc doesn't fit
 		// TODO
-
 		return channel
 	}
 	return nil
@@ -112,19 +111,23 @@ func (g *Graph) Sync() error {
 			g.channelMap[channel.Source] = from
 		} else {
 			from[channel.Destination] = &channel
+			g.channelMap[channel.Source] = from
 		}
 
 		if _, ok := g.channelMap[channel.Destination]; !ok {
-			g.channelMap = make(map[string]map[string]*Channel)
+			g.channelMap[channel.Destination] = make(map[string]*Channel)
 		}
 
-		node1 := Node{g, channel.Source, ""}
-		node2 := Node{g, channel.Destination, ""}
-		g.nodeMapId[channel.Source] = &node1
-		g.nodeMapIdx[g.idx] = &node1
+		node := Node{g, channel.Source, ""}
+		g.nodeMapId[channel.Source] = &node
+		g.nodeMapIdx[g.idx] = &node
+		g.nodeIndex[channel.Source] = g.idx
 		g.idx++
-		g.nodeMapId[channel.Destination] = &node2
-		g.nodeMapIdx[g.idx] = &node2
+
+		node = Node{g, channel.Destination, ""}
+		g.nodeMapId[channel.Destination] = &node
+		g.nodeMapIdx[g.idx] = &node
+		g.nodeIndex[channel.Destination] = g.idx
 		g.idx++
 	}
 
@@ -214,7 +217,6 @@ func (ln *Client) GetRoute(
 	fromid string,
 	fuzzpercent float64,
 	exclude []string,
-	maxhops int,
 ) (route []RouteHop, err error) {
 	// fail obvious errors
 	if id == fromid {
@@ -264,7 +266,7 @@ func (ln *Client) GetRoute(
 	plen := len(path)
 	route = make([]RouteHop, plen)
 
-	if len(path) == 1 {
+	if plen == 1 {
 		// single-hop payment, end here
 		channel := g.Edge(g.nodeIndex[fromid], g.nodeIndex[id]).(*Channel)
 		route[plen-1] = RouteHop{
@@ -272,7 +274,7 @@ func (ln *Client) GetRoute(
 			Msatoshi: msatoshi, // no fees for the last channel, just the fuzz
 			Delay:    channel.Delay,
 		}
-		return
+		return route, nil
 	}
 
 	// build the route from the ante-last hop backwards

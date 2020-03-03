@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 	"github.com/tidwall/gjson"
 )
 
@@ -96,7 +95,7 @@ func errType(key string) error {
 	return fmt.Errorf("key: %q failed type conversion", key)
 }
 
-func GetParams(msg lightning.JSONRPCMessage, usage string) (params Params, err error) {
+func GetParams(givenParams interface{}, usage string) (params Params, err error) {
 	usage = strings.TrimSpace(usage)
 	if usage == "" {
 		return
@@ -123,7 +122,7 @@ func GetParams(msg lightning.JSONRPCMessage, usage string) (params Params, err e
 	}
 
 	params = make(map[string]interface{})
-	switch p := msg.Params.(type) {
+	switch p := givenParams.(type) {
 	case []interface{}:
 		for i, v := range p {
 

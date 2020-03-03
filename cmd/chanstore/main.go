@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coreos/bbolt"
@@ -20,11 +22,13 @@ const (
 
 var db *bbolt.DB
 var err error
+var continuehook = map[string]string{"result": "continue"}
 
 func main() {
 	p := plugin.Plugin{
 		Name:    "chanstore",
 		Version: "v0.1",
+		Dynamic: true,
 		Options: []plugin.Option{
 			{
 				"chanstore-server",
@@ -32,51 +36,86 @@ func main() {
 				false,
 				"Should run a chanstore hidden service or not.",
 			},
-		},
-		Subscriptions: []plugin.Subscription{
 			{
-				"invoice_payment",
-				func(p *plugin.Plugin, params plugin.Params) {
-					label := params.Get("label").String()
-					preimage := params.Get("preimage").String()
-
-				},
+				"chanstore-connect",
+				"string",
+				"",
+				"chanstore services to connect to.",
 			},
 		},
 		Hooks: []plugin.Hook{
 			{
 				"rpc_command",
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
-					if params.Get("method").String() != "getroute" {
-						return map[string]string{"result": "continue"}
+					rpc_command := params.Get("rpc_command.rpc_command")
+
+					if rpc_command.Get("method").String() != "getroute" {
+						return continuehook
 					}
 
-					toExclude := params.Get("params.exclude").Array()
-					exclude := make([]string, len(toExclude))
-					for i, scid := range toExclude {
-						exclude[i] = scid.String()
+					parsed, err := plugin.GetParams(
+						rpc_command.Get("params").Value(),
+						"id msatoshi riskfactor [cltv] [fromid] [fuzzpercent] [exclude] [maxhops]",
+					)
+					if err != nil {
+						p.Log("failed to parse getroute parameters: %s", err)
+						return continuehook
 					}
 
-					fuzz := params.Get("params.fuzzpercent").String()
+					exclude, _ := parsed.Get("exclude").Value().([]string)
+
+					fuzz := parsed.Get("fuzzpercent").String()
 					fuzzpercent, err := strconv.ParseFloat(fuzz, 64)
 					if err != nil {
 						fuzzpercent = 5.0
 					}
 
+					fromid := parsed.Get("fromid").String()
+					if fromid == "" {
+						res, err := p.Client.Call("getinfo")
+						if err != nil {
+							p.Logf("can't get our own nodeid: %w", err)
+							return continuehook
+						}
+						fromid = res.Get("id").String()
+					}
+
+					cltv := parsed.Get("cltv").Int()
+					if cltv == 0 {
+						cltv = 9
+					}
+
+					target := parsed.Get("id").String()
+					msatoshi := parsed.Get("msatoshi").Int()
+					riskfactor := int(parsed.Get("riskfactor").Int())
+
+					p.Logf("querying route from %s to %s for %d msatoshi with riskfactor %d, fuzzpercent %f, excluding %v", fromid, target, msatoshi, riskfactor, fuzzpercent, exclude)
+
 					route, err := p.Client.GetRoute(
-						params.Get("params.id").String(),
-						params.Get("params.msatoshi").Int(),
-						int(params.Get("params.riskfactor").Int()),
-						params.Get("params.cltv").Int(),
-						params.Get("params.fromid").String(),
+						target,
+						msatoshi,
+						riskfactor,
+						cltv,
+						fromid,
 						fuzzpercent,
 						exclude,
-						int(params.Get("params.maxhops").Int()),
 					)
 
+					p.Log(err)
+					p.Log(route)
+
 					if err != nil {
-						p.Logf("failed to getroute: %w, falling back to default.", err)
-						return map[string]string{"result": "continue"}
+						p.Logf("failed to getroute: %s, falling back to default.", err)
+						return continuehook
+					}
+
+					maxhops := int(parsed.Get("maxhops").Int())
+					if maxhops > 0 && len(route) > maxhops {
+						return map[string]interface{}{
+							"return": map[string]interface{}{
+								"error": fmt.Sprintf("Shortest route found is %d hops. Adjust the maxhops parameter if you want to use it.", len(route)),
+							},
+						}
 					}
 
 					return map[string]interface{}{
@@ -105,8 +144,18 @@ func main() {
 				return nil
 			})
 
+			// get new channels from servers from time to time
+			serverlist := p.Args.Get("chanstore-connect").String()
+			for _, server := range strings.Split(serverlist, ",") {
+				if server == "" {
+					continue
+				}
+				go getUpdates(p, server)
+			}
+
 			// now we determine if we are going to be a channel server or not
 			if !p.Args.Get("chanstore-server").Bool() {
+				// from now on only run server-specific code
 				return
 			}
 
@@ -123,10 +172,10 @@ func main() {
 			router.Path("/events").HandlerFunc(get)
 
 			// start tor with default config
-			p.Log("Starting and registering onion service, please wait a couple of minutes...")
+			p.Log("starting onion service, please wait a couple of minutes...")
 			t, err := tor.Start(nil, nil)
 			if err != nil {
-				p.Logf("Unable to start Tor: %w", err)
+				p.Logf("unable to start Tor: %w", err)
 				return
 			}
 			defer t.Close()
@@ -142,7 +191,7 @@ func main() {
 				RemotePorts: []int{80},
 			})
 			if err != nil {
-				p.Logf("Unable to create onion service: %w", err)
+				p.Logf("unable to create onion service: %w", err)
 				return
 			}
 			defer onion.Close()
