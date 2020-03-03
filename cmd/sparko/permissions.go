@@ -18,6 +18,10 @@ func readPermissionsConfig(configstr string) (Keys, error) {
 	for _, keyentry := range strings.Split(configstr, ";") {
 		parts := strings.Split(keyentry, ":")
 		key := strings.TrimSpace(parts[0])
+		if key == "" {
+			continue
+		}
+
 		if len(parts) == 1 {
 			// it has all permissions
 			keys[key] = PermissionSet{}
