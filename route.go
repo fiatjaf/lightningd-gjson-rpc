@@ -23,8 +23,9 @@ type Graph struct {
 	channelsTo   map[string][]*Channel
 	channelMap   map[string]*Channel
 
-	maxhops  int
-	msatoshi int64
+	maxhops       int
+	maxchannelfee int64
+	msatoshi      int64
 }
 
 func (g *Graph) SearchDualBFS(start string, end string) (path []*Channel) {
@@ -41,7 +42,8 @@ func (g *Graph) SearchDualBFS(start string, end string) (path []*Channel) {
 		for node, routeFrom := range fromEnd {
 			for _, channel := range g.channelsTo[node] {
 				if g.msatoshi < channel.HtlcMinimumMsat ||
-					g.msatoshi > channel.HtlcMaximumMsat {
+					g.msatoshi > channel.HtlcMaximumMsat ||
+					channel.Fee(g.msatoshi, 0, 0) > g.maxchannelfee {
 					continue
 				}
 
@@ -56,7 +58,8 @@ func (g *Graph) SearchDualBFS(start string, end string) (path []*Channel) {
 		for node, routeUntil := range fromStart {
 			for _, channel := range g.channelsFrom[node] {
 				if g.msatoshi < channel.HtlcMinimumMsat ||
-					g.msatoshi > channel.HtlcMaximumMsat {
+					g.msatoshi > channel.HtlcMaximumMsat ||
+					channel.Fee(g.msatoshi, 0, 0) > g.maxchannelfee {
 					continue
 				}
 
@@ -151,7 +154,7 @@ func (c *Channel) Fee(msatoshi, riskfactor int64, fuzzpercent float64) int64 {
 	fee := int64(math.Ceil(
 		float64(c.BaseFeeMillisatoshi) + float64(c.FeePerMillionth*msatoshi)/1000000,
 	))
-	fuzz := int64(rand.Intn(int(fuzzpercent))) * fee / 100
+	fuzz := int64(rand.Float64() * fuzzpercent * float64(fee) / 100)
 	riskfee := c.Delay * msatoshi * riskfactor / 5259600
 	return fee + fuzz + riskfee
 }
@@ -165,6 +168,7 @@ func (ln *Client) GetRoute(
 	fuzzpercent float64,
 	exclude []string,
 	maxhops int,
+	maxchannelfeepercent float64,
 ) (route []RouteHop, err error) {
 	// fail obvious errors
 	if id == fromid {
@@ -194,6 +198,7 @@ func (ln *Client) GetRoute(
 	// set globals
 	g.msatoshi = msatoshi
 	g.maxhops = maxhops
+	g.maxchannelfee = int64(maxchannelfeepercent * float64(msatoshi) / 100)
 
 	// get the best path
 	path := g.SearchDualBFS(fromid, id)

@@ -150,6 +150,7 @@ func main() {
 						fuzzpercent,
 						exclude,
 						maxhops,
+						0.5,
 					)
 
 					if err != nil {
