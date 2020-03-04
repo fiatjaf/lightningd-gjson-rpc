@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -85,6 +84,11 @@ func main() {
 						cltv = 9
 					}
 
+					maxhops := int(parsed.Get("maxhops").Int())
+					if maxhops == 0 {
+						maxhops = 20
+					}
+
 					target := parsed.Get("id").String()
 					msatoshi := parsed.Get("msatoshi").Int()
 					riskfactor := int(parsed.Get("riskfactor").Int())
@@ -99,23 +103,12 @@ func main() {
 						fromid,
 						fuzzpercent,
 						exclude,
+						maxhops,
 					)
-
-					p.Log(err)
-					p.Log(route)
 
 					if err != nil {
 						p.Logf("failed to getroute: %s, falling back to default.", err)
 						return continuehook
-					}
-
-					maxhops := int(parsed.Get("maxhops").Int())
-					if maxhops > 0 && len(route) > maxhops {
-						return map[string]interface{}{
-							"return": map[string]interface{}{
-								"error": fmt.Sprintf("Shortest route found is %d hops. Adjust the maxhops parameter if you want to use it.", len(route)),
-							},
-						}
 					}
 
 					return map[string]interface{}{
