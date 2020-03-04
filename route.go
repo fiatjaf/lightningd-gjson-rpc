@@ -2,6 +2,7 @@ package lightning
 
 import (
 	"errors"
+	"log"
 	"math"
 	"math/rand"
 	"strconv"
@@ -20,6 +21,7 @@ type Graph struct {
 
 	channelsFrom map[string][]*Channel
 	channelsTo   map[string][]*Channel
+	channelMap   map[string]*Channel
 
 	maxhops  int
 	msatoshi int64
@@ -38,9 +40,12 @@ func (g *Graph) Search(start string, end string) (path []*Channel) {
 		fromEndNext := make(map[string][]*Channel)
 		for node, routeFrom := range fromEnd {
 			for _, channel := range g.channelsTo[node] {
-				routeFromNext := make([]*Channel, i)
-				copy(routeFromNext, routeFrom)
-				routeFromNext[i-1] = channel
+				if g.msatoshi < channel.HtlcMinimumMsat ||
+					g.msatoshi > channel.HtlcMaximumMsat {
+					continue
+				}
+
+				routeFromNext := append([]*Channel{channel}, routeFrom...)
 				fromEndNext[channel.Source] = routeFromNext
 			}
 		}
@@ -50,6 +55,11 @@ func (g *Graph) Search(start string, end string) (path []*Channel) {
 		fromStartNext := make(map[string][]*Channel)
 		for node, routeUntil := range fromStart {
 			for _, channel := range g.channelsFrom[node] {
+				if g.msatoshi < channel.HtlcMinimumMsat ||
+					g.msatoshi > channel.HtlcMaximumMsat {
+					continue
+				}
+
 				routeUntilNext := make([]*Channel, i)
 				copy(routeUntilNext, routeUntil)
 				routeUntilNext[i-1] = channel
@@ -57,6 +67,9 @@ func (g *Graph) Search(start string, end string) (path []*Channel) {
 
 				// check for a match
 				if routeFrom, ok := fromEnd[channel.Destination]; ok {
+					// check route fee
+					// TODO
+
 					// combine routes and return
 					return append(routeUntilNext, routeFrom...)
 				}
@@ -72,6 +85,7 @@ func (g *Graph) Sync() error {
 	// reset our data
 	g.channelsFrom = make(map[string][]*Channel)
 	g.channelsTo = make(map[string][]*Channel)
+	g.channelMap = make(map[string]*Channel)
 
 	// get data from normal LN gossip
 	res, err := g.client.Call("listchannels")
@@ -83,21 +97,30 @@ func (g *Graph) Sync() error {
 		htlcmin, _ := strconv.ParseInt(strings.Split(ch.Get("htlc_minimum_msat").String(), "m")[0], 10, 64)
 		htlcmax, _ := strconv.ParseInt(strings.Split(ch.Get("htlc_maximum_msat").String(), "m")[0], 10, 64)
 
+		source := ch.Get("source").String()
+		destination := ch.Get("destination").String()
+		direction := 0
+		if source > destination {
+			direction = 1
+		}
+
 		channel := &Channel{
 			g:                   g,
-			Source:              ch.Get("source").String(),
-			Destination:         ch.Get("destination").String(),
+			Source:              source,
+			Destination:         destination,
 			ShortChannelID:      ch.Get("short_channel_id").String(),
 			Satoshis:            ch.Get("satoshis").Int(),
 			BaseFeeMillisatoshi: ch.Get("base_fee_millisatoshi").Int(),
 			FeePerMillionth:     ch.Get("fee_per_millionth").Int(),
 			Delay:               ch.Get("delay").Int(),
+			Direction:           direction,
 			HtlcMinimumMsat:     htlcmin,
 			HtlcMaximumMsat:     htlcmax,
 		}
 
 		g.channelsFrom[channel.Source] = append(g.channelsFrom[channel.Source], channel)
 		g.channelsTo[channel.Destination] = append(g.channelsTo[channel.Destination], channel)
+		g.channelMap[channel.ShortChannelID+"/"+strconv.Itoa(channel.Direction)] = channel
 	}
 
 	// get data from our custom servers
@@ -119,23 +142,18 @@ type Channel struct {
 	BaseFeeMillisatoshi int64  `json:"base_fee_millisatoshi"`
 	FeePerMillionth     int64  `json:"fee_per_millionth"`
 	Delay               int64  `json:"delay"`
+	Direction           int    `json:"direction"`
 	HtlcMinimumMsat     int64  `json:"htlc_minimum_msat"`
 	HtlcMaximumMsat     int64  `json:"htlc_maximum_msat"`
 }
 
 func (c *Channel) Fee(msatoshi int64) int64 {
+	// add riskfactor
+	// TODO
+
 	return int64(math.Ceil(
 		float64(c.BaseFeeMillisatoshi) + float64(c.FeePerMillionth*msatoshi)/1000000,
 	))
-}
-
-type RouteHop struct {
-	Id         string `json:"id"`
-	Channel    string `json:"channel"`
-	Msatoshi   int64  `json:"msatoshi"`
-	AmountMsat string `json:"amount_msat,omitempty"`
-	Delay      int64  `json:"delay"`
-	Style      string `json:"style,omitempty"`
 }
 
 func (ln *Client) GetRoute(
@@ -166,8 +184,17 @@ func (ln *Client) GetRoute(
 	}
 
 	// exclude channels
-	// TODO
-	// (set maxhtlc to zero in these)
+	for _, scid := range exclude {
+		if channel, ok := g.channelMap[scid]; ok {
+			defer unexclude(channel, channel.HtlcMaximumMsat)
+			channel.HtlcMaximumMsat = 0
+		}
+	}
+
+	// calculate fuzz
+	if fuzzpercent > 0 {
+		msatoshi = msatoshi * int64(1+rand.Intn(int(fuzzpercent))/100)
+	}
 
 	// set globals
 	g.msatoshi = msatoshi
@@ -178,12 +205,8 @@ func (ln *Client) GetRoute(
 	plen := len(path)
 
 	if plen == 0 {
+		log.Print("msatoshi ", msatoshi, " ", g.msatoshi)
 		return nil, errors.New("no path found")
-	}
-
-	// calculate fuzz
-	if fuzzpercent > 0 {
-		msatoshi = msatoshi * int64(1+rand.Intn(int(fuzzpercent))/100)
 	}
 
 	// turn the path into a lightning route
@@ -192,10 +215,14 @@ func (ln *Client) GetRoute(
 	// the last hop
 	channel := path[plen-1]
 	route[plen-1] = RouteHop{
-		Channel:  channel.ShortChannelID,
-		Id:       id,
-		Msatoshi: msatoshi, // no fees for the last channel, just the fuzz
-		Delay:    channel.Delay,
+		Channel:   channel.ShortChannelID,
+		Direction: channel.Direction,
+		Id:        channel.Destination,
+		Msatoshi:  msatoshi, // no fees for the last channel, just the fuzz
+		Delay:     cltv,
+
+		arrivingFee:   channel.Fee(msatoshi),
+		arrivingDelay: channel.Delay,
 	}
 
 	if plen == 1 {
@@ -207,13 +234,37 @@ func (ln *Client) GetRoute(
 	for i := plen - 2; i >= 0; i-- {
 		nexthop := route[i+1]
 		channel := path[i]
+		amount := nexthop.Msatoshi + nexthop.arrivingFee
 		route[i] = RouteHop{
-			Channel:  channel.ShortChannelID,
-			Id:       channel.Destination,
-			Msatoshi: nexthop.Msatoshi + channel.Fee(nexthop.Msatoshi),
-			Delay:    nexthop.Delay + channel.Delay,
+			Channel:   channel.ShortChannelID,
+			Direction: channel.Direction,
+			Id:        channel.Destination,
+			Msatoshi:  amount,
+			Delay:     nexthop.Delay + nexthop.arrivingDelay,
+
+			arrivingFee:   channel.Fee(amount),
+			arrivingDelay: channel.Delay,
 		}
 	}
 
 	return
+}
+
+type RouteHop struct {
+	Id        string `json:"id"`
+	Channel   string `json:"channel"`
+	Direction int    `json:"direction"`
+	Msatoshi  int64  `json:"msatoshi"`
+	Delay     int64  `json:"delay"`
+
+	// fee and delay that must arrive here, so must be applied at the previous hop
+	arrivingFee   int64
+	arrivingDelay int64
+}
+
+func unexclude(channel *Channel, htlcmax int64) {
+	if channel == nil {
+		return
+	}
+	channel.HtlcMaximumMsat = htlcmax
 }

@@ -13,15 +13,24 @@ import (
 	"github.com/cretz/bine/tor"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 	"github.com/gorilla/mux"
+	"github.com/kr/pretty"
 )
 
 const (
 	DATABASE_FILE = "chanstore.db"
 )
 
+var (
+	continuehook = map[string]string{"result": "continue"}
+	multipliers  = map[string]float64{
+		"msat": 1,
+		"sat":  1000,
+		"btc":  100000000000,
+	}
+)
+
 var db *bbolt.DB
 var err error
-var continuehook = map[string]string{"result": "continue"}
 
 func main() {
 	p := plugin.Plugin{
@@ -45,23 +54,35 @@ func main() {
 		Hooks: []plugin.Hook{
 			{
 				"rpc_command",
-				func(p *plugin.Plugin, params plugin.Params) (resp interface{}) {
-					rpc_command := params.Get("rpc_command.rpc_command")
+				func(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
+					rpc_command := payload.Get("rpc_command.rpc_command")
 
 					if rpc_command.Get("method").String() != "getroute" {
 						return continuehook
 					}
 
-					parsed, err := plugin.GetParams(
-						rpc_command.Get("params").Value(),
-						"id msatoshi riskfactor [cltv] [fromid] [fuzzpercent] [exclude] [maxhops]",
-					)
-					if err != nil {
-						p.Log("failed to parse getroute parameters: %s", err)
-						return continuehook
+					iparams := rpc_command.Get("params").Value()
+					pretty.Log(iparams)
+					var parsed plugin.Params
+					switch params := iparams.(type) {
+					case []interface{}:
+						parsed, err = plugin.GetParams(
+							params,
+							"id msatoshi riskfactor [cltv] [fromid] [fuzzpercent] [exclude] [maxhops]",
+						)
+						if err != nil {
+							p.Log("failed to parse getroute parameters: %s", err)
+							return continuehook
+						}
+					case map[string]interface{}:
+						parsed = plugin.Params(params)
 					}
 
-					exclude, _ := parsed.Get("exclude").Value().([]string)
+					exc := parsed.Get("exclude").Array()
+					exclude := make([]string, len(exc))
+					for i, chandir := range exc {
+						exclude[i] = chandir.String()
+					}
 
 					fuzz := parsed.Get("fuzzpercent").String()
 					fuzzpercent, err := strconv.ParseFloat(fuzz, 64)
@@ -89,8 +110,35 @@ func main() {
 						maxhops = 20
 					}
 
-					target := parsed.Get("id").String()
 					msatoshi := parsed.Get("msatoshi").Int()
+					if msatoshi == 0 {
+						for _, suffix := range []string{"msat", "sat", "btc"} {
+							msatoshiStr := parsed.Get("msatoshi").String()
+							spl := strings.Split(msatoshiStr, suffix)
+							if len(spl) == 2 {
+								amt, err := strconv.ParseFloat(spl[0], 10)
+								if err != nil {
+									return map[string]interface{}{
+										"return": map[string]interface{}{
+											"error": "failed to parse " + msatoshiStr,
+										},
+									}
+								}
+								msatoshi = int64(amt * multipliers[suffix])
+								break
+							}
+						}
+					}
+
+					if msatoshi == 0 {
+						return map[string]interface{}{
+							"return": map[string]interface{}{
+								"error": "msatoshi can't be 0",
+							},
+						}
+					}
+
+					target := parsed.Get("id").String()
 					riskfactor := int(parsed.Get("riskfactor").Int())
 
 					p.Logf("querying route from %s to %s for %d msatoshi with riskfactor %d, fuzzpercent %f, excluding %v", fromid, target, msatoshi, riskfactor, fuzzpercent, exclude)
