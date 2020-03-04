@@ -27,7 +27,7 @@ type Graph struct {
 	msatoshi int64
 }
 
-func (g *Graph) Search(start string, end string) (path []*Channel) {
+func (g *Graph) SearchDualBFS(start string, end string) (path []*Channel) {
 	fromEnd := map[string][]*Channel{
 		end: []*Channel{},
 	}
@@ -147,19 +147,19 @@ type Channel struct {
 	HtlcMaximumMsat     int64  `json:"htlc_maximum_msat"`
 }
 
-func (c *Channel) Fee(msatoshi int64) int64 {
-	// add riskfactor
-	// TODO
-
-	return int64(math.Ceil(
+func (c *Channel) Fee(msatoshi, riskfactor int64, fuzzpercent float64) int64 {
+	fee := int64(math.Ceil(
 		float64(c.BaseFeeMillisatoshi) + float64(c.FeePerMillionth*msatoshi)/1000000,
 	))
+	fuzz := int64(rand.Intn(int(fuzzpercent))) * fee / 100
+	riskfee := c.Delay * msatoshi * riskfactor / 5259600
+	return fee + fuzz + riskfee
 }
 
 func (ln *Client) GetRoute(
 	id string,
 	msatoshi int64,
-	riskfactor int,
+	riskfactor int64,
 	cltv int64,
 	fromid string,
 	fuzzpercent float64,
@@ -191,17 +191,12 @@ func (ln *Client) GetRoute(
 		}
 	}
 
-	// calculate fuzz
-	if fuzzpercent > 0 {
-		msatoshi = msatoshi * int64(1+rand.Intn(int(fuzzpercent))/100)
-	}
-
 	// set globals
 	g.msatoshi = msatoshi
 	g.maxhops = maxhops
 
 	// get the best path
-	path := g.Search(fromid, id)
+	path := g.SearchDualBFS(fromid, id)
 	plen := len(path)
 
 	if plen == 0 {
@@ -218,10 +213,10 @@ func (ln *Client) GetRoute(
 		Channel:   channel.ShortChannelID,
 		Direction: channel.Direction,
 		Id:        channel.Destination,
-		Msatoshi:  msatoshi, // no fees for the last channel, just the fuzz
+		Msatoshi:  msatoshi, // no fees for the last channel
 		Delay:     cltv,
 
-		arrivingFee:   channel.Fee(msatoshi),
+		arrivingFee:   channel.Fee(msatoshi, riskfactor, fuzzpercent),
 		arrivingDelay: channel.Delay,
 	}
 
@@ -242,7 +237,7 @@ func (ln *Client) GetRoute(
 			Msatoshi:  amount,
 			Delay:     nexthop.Delay + nexthop.arrivingDelay,
 
-			arrivingFee:   channel.Fee(amount),
+			arrivingFee:   channel.Fee(amount, riskfactor, fuzzpercent),
 			arrivingDelay: channel.Delay,
 		}
 	}

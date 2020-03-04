@@ -13,7 +13,6 @@ import (
 	"github.com/cretz/bine/tor"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 	"github.com/gorilla/mux"
-	"github.com/kr/pretty"
 )
 
 const (
@@ -62,7 +61,6 @@ func main() {
 					}
 
 					iparams := rpc_command.Get("params").Value()
-					pretty.Log(iparams)
 					var parsed plugin.Params
 					switch params := iparams.(type) {
 					case []interface{}:
@@ -139,7 +137,7 @@ func main() {
 					}
 
 					target := parsed.Get("id").String()
-					riskfactor := int(parsed.Get("riskfactor").Int())
+					riskfactor := parsed.Get("riskfactor").Int()
 
 					p.Logf("querying route from %s to %s for %d msatoshi with riskfactor %d, fuzzpercent %f, excluding %v", fromid, target, msatoshi, riskfactor, fuzzpercent, exclude)
 
