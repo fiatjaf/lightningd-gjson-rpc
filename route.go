@@ -2,7 +2,7 @@ package lightning
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
@@ -175,6 +175,25 @@ func (ln *Client) GetRoute(
 		return nil, errors.New("start == end")
 	}
 
+	path, err := ln.GetPath(id, msatoshi, fromid, exclude, maxhops, maxchannelfeepercent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query path: %w", err)
+	}
+
+	// turn the path into a lightning route
+	route = PathToRoute(path, msatoshi, cltv, riskfactor, fuzzpercent)
+
+	return
+}
+
+func (ln *Client) GetPath(
+	id string,
+	msatoshi int64,
+	fromid string,
+	exclude []string,
+	maxhops int,
+	maxchannelfeepercent float64,
+) (path []*Channel, err error) {
 	// init graph
 	if g == nil {
 		g = &Graph{client: ln}
@@ -201,15 +220,23 @@ func (ln *Client) GetRoute(
 	g.maxchannelfee = int64(maxchannelfeepercent * float64(msatoshi) / 100)
 
 	// get the best path
-	path := g.SearchDualBFS(fromid, id)
-	plen := len(path)
+	path = g.SearchDualBFS(fromid, id)
 
-	if plen == 0 {
-		log.Print("msatoshi ", msatoshi, " ", g.msatoshi)
+	if len(path) == 0 {
 		return nil, errors.New("no path found")
 	}
 
-	// turn the path into a lightning route
+	return path, nil
+}
+
+func PathToRoute(
+	path []*Channel,
+	msatoshi int64,
+	cltv int64,
+	riskfactor int64,
+	fuzzpercent float64,
+) (route []RouteHop) {
+	plen := len(path)
 	route = make([]RouteHop, plen)
 
 	// the last hop
@@ -227,7 +254,7 @@ func (ln *Client) GetRoute(
 
 	if plen == 1 {
 		// single-hop payment, end here
-		return route, nil
+		return route
 	}
 
 	// build the route from the ante-last hop backwards
@@ -247,7 +274,7 @@ func (ln *Client) GetRoute(
 		}
 	}
 
-	return
+	return route
 }
 
 type RouteHop struct {
