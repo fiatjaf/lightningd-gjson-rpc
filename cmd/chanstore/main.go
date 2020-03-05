@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/coreos/bbolt"
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
@@ -19,12 +18,12 @@ import (
 const (
 	DATABASE_FILE = "chanstore.db"
 
-	REPLY_INVOICE       = 63241
-	REPLY_CHANNEL       = 63243
-	MSG_REQUEST_INVOICE = 63245
-	MSG_ADD_CHANNEL     = 63247
-	MSG_REPORT_CHANNEL  = 63249
-	MSG_REQUEST_CHANNEL = 63251
+	REPLY_INVOICE        = 63241
+	REPLY_CHANNEL        = 63243
+	MSG_REQUEST_INVOICE  = 63245
+	MSG_ADD_CHANNEL      = 63247
+	MSG_REPORT_CHANNEL   = 63249
+	MSG_REQUEST_CHANNELS = 63251
 
 	PROBE_AMOUNT = 100000
 )
@@ -37,6 +36,7 @@ var (
 		"btc":  100000000000,
 	}
 	channelswaitingtosend = map[string]*lightning.Channel{}
+	serverlist            = make(map[string]bool)
 )
 
 var db *bbolt.DB
@@ -52,19 +52,19 @@ func main() {
 				"chanstore-connect",
 				"string",
 				"",
-				"chanstore service addresses to fetch channels from, comma-separated.",
+				"Chanstore service addresses to fetch channels from, comma-separated.",
+			},
+			{
+				"chanstore-server",
+				"bool",
+				false,
+				"If enabled, run a chanstore server.",
 			},
 			{
 				"chanstore-price",
 				"integer",
 				72,
 				"Satoshi price to ask for peers to include a channel.",
-			},
-			{
-				"chanstore-connect",
-				"string",
-				"",
-				"chanstore services to fetch channels from, comma-separated.",
 			},
 		},
 		Hooks: []plugin.Hook{
@@ -207,7 +207,9 @@ func main() {
 						}
 						bolt11 := res.Get("bolt11").String()
 
-						_, err = p.Client.Call("dev-sendcustommsg", peer, strconv.FormatInt(REPLY_INVOICE, 16)+hex.EncodeToString([]byte(bolt11)))
+						_, err = p.Client.Call("dev-sendcustommsg", peer,
+							strconv.FormatInt(REPLY_INVOICE, 16)+
+								hex.EncodeToString([]byte(bolt11)))
 						if err != nil {
 							p.Logf("error sending reply: %s", err.Error())
 							return
@@ -223,7 +225,7 @@ func main() {
 						}
 
 						// check if invoice has been paid
-						res, _ := p.Client.Call("listchannels", "chanstore/"+peer)
+						res, _ := p.Client.Call("listinvoices", "chanstore/"+peer)
 						if res.Get("invoices.0.status").String() != "paid" {
 							p.Logf("channel-add, but chanstore/%s is not paid", peer)
 							return
@@ -299,7 +301,7 @@ func main() {
 						// add channel to database
 						var jchanneldata []byte
 						db.Update(func(tx *bbolt.Tx) error {
-							bucket := tx.Bucket([]byte("channels"))
+							bucket := tx.Bucket([]byte("server"))
 
 							last, _ := bucket.Cursor().Last()
 							jchanneldata, _ = json.Marshal(channel)
@@ -315,39 +317,77 @@ func main() {
 						}
 						for _, peerdata := range res.Get("peers").Array() {
 							peerid := peerdata.Get("id").String()
-							p.Client.Call("dev-sendcustommsg", peerid, strconv.FormatInt(REPLY_CHANNEL, 16)+hex.EncodeToString(jchanneldata))
+							p.Client.Call("dev-sendcustommsg", peerid,
+								strconv.FormatInt(REPLY_CHANNEL, 16)+
+									hex.EncodeToString(jchanneldata))
 						}
 
 					case MSG_REPORT_CHANNEL:
-					case MSG_REQUEST_CHANNEL:
-						channelid, err := hex.DecodeString(message[4:])
-						if err != nil {
-							p.Logf("invalid channel-request message: %s", err.Error())
-							return
-						}
-
+					case MSG_REQUEST_CHANNELS:
 						db.View(func(tx *bbolt.Tx) error {
-							bucket := tx.Bucket([]byte("channels"))
-							channeldata := bucket.Get(channelid)
-							if channeldata == nil {
-								p.Logf("requested channel %s not found", channelid)
-								return nil
-							}
-							_, err := p.Client.Call("dev-sendcustommsg", peer, strconv.FormatInt(REPLY_CHANNEL, 16)+hex.EncodeToString(channeldata))
-							if err != nil {
-								p.Logf("error sending reply: %s", err.Error())
+							c := tx.Bucket([]byte("server")).Cursor()
+
+							since, _ := hex.DecodeString(message[4:])
+							for _, v := c.Seek(since); v != nil; _, v = c.Next() {
+								_, err = p.Client.Call("dev-sendcustommsg", peer,
+									strconv.FormatInt(REPLY_CHANNEL, 16)+
+										hex.EncodeToString(v))
+								if err != nil {
+									p.Logf("error sending reply: %s", err.Error())
+								}
 							}
 							return nil
 						})
 					case REPLY_CHANNEL:
 						// we got a channel
 						// if is from a server we trust, add it to our database
+						if _, ok := serverlist[peer]; ok {
+							var channel lightning.Channel
+							channeldata, _ := hex.DecodeString(message[4:])
+							err := json.Unmarshal(channeldata, &channel)
+							if err != nil {
+								p.Logf("invalid channel-reply message: %s", err.Error())
+								return
+							}
 
+							p.Logf("got %s from %s", channel.ShortChannelID, peer)
+
+							// add channel to database
+							db.Update(func(tx *bbolt.Tx) error {
+								bucket := tx.Bucket([]byte(peer))
+								jchanneldata, _ := json.Marshal(channel)
+								bucket.Put([]byte(channel.ShortChannelID), jchanneldata)
+								return nil
+							})
+						} else {
+							p.Logf("got channel %s, but we don't know them", peer)
+						}
 					case REPLY_INVOICE:
+						// if this is expected, pay the invoice and send the channel
 						if channel, ok := channelswaitingtosend[peer]; ok {
-							// if this is expected, pay the invoice and send the channel
+							// it is expected (we've requested this invoice earlier)
+							bbolt11, err := hex.DecodeString(message[4:])
+							if err != nil {
+								p.Logf("invalid invoice-reply: %s", err.Error())
+								return
+							}
+							bolt11 := string(bbolt11)
+
+							// check amount
+							d, err := p.Client.Call("decodepay", bolt11)
+							if err != nil || d.Get("msatoshi").Int() > 500000 {
+								p.Logf("invoice too big: %s %s", err.Error(), bolt11)
+								return
+							}
+
+							// pay it
+							p.Client.Call("pay", bolt11)
+
+							// send the channel
 							jchanneldata, _ := json.Marshal(channel)
-							_, err := p.Client.Call("dev-sendcustommsg", peer, strconv.FormatInt(MSG_ADD_CHANNEL, 16)+hex.EncodeToString(jchanneldata))
+							_, err = p.Client.Call("dev-sendcustommsg", peer,
+								strconv.FormatInt(MSG_ADD_CHANNEL, 16)+
+									hex.EncodeToString(jchanneldata))
 							if err != nil {
 								p.Logf("error sending channel-add: %s", err.Error())
 							}
@@ -368,44 +408,55 @@ func main() {
 			}
 			defer db.Close()
 
-			// create channel bucket
-			db.Update(func(tx *bbolt.Tx) error {
-				tx.CreateBucketIfNotExists([]byte("channels"))
-				return nil
-			})
-
-			// get new channels from servers from time to time
-			serverlist := p.Args.Get("chanstore-connect").String()
-			for _, server := range strings.Split(serverlist, ",") {
+			// parse list of servers to connect to
+			for _, server := range strings.Split(p.Args.Get("chanstore-connect").String(), ",") {
 				if server == "" {
 					continue
 				}
-				go getUpdates(p, server)
+				serverlist[server] = true
+			}
+
+			// create local channel bucket
+			db.Update(func(tx *bbolt.Tx) error {
+				// a bucket for channels people may send to us
+				tx.CreateBucketIfNotExists([]byte("server"))
+
+				// then there are other buckets, one with each peer id as name
+				// for channels we may get from other servers and that we will
+				// use locally
+				for server, _ := range serverlist {
+					tx.CreateBucketIfNotExists([]byte(server))
+				}
+
+				return nil
+			})
+
+			// connect and fetch channels from servers
+			for server, _ := range serverlist {
+				db.View(func(tx *bbolt.Tx) error {
+					bucket := tx.Bucket([]byte(server))
+					stats := bucket.Stats()
+
+					// count the number of objects in a bucket
+					// so we can tell the server and expect all the new stuff
+					last := int64(stats.KeyN - 1)
+					p.Logf("querying %s since %d", server, last)
+
+					// we send this and then expect the server to send
+					// all available channels to us
+					_, err = p.Client.Call("dev-sendcustommsg", server,
+						strconv.FormatInt(MSG_REQUEST_CHANNELS, 16)+
+							strconv.FormatInt(last, 16))
+					if err != nil {
+						p.Logf("error sending channels-request: %s", err.Error())
+						return nil
+					}
+
+					return nil
+				})
 			}
 		},
 	}
 
 	p.Run()
-}
-
-func getUpdates(p *plugin.Plugin, server string) {
-	// on startup we query the server for updates since our last
-	// we expect it to notify us if new channels appear
-	for {
-		db.Update(func(tx *bbolt.Tx) error {
-			bucket := tx.Bucket([]byte("channels"))
-
-			last, _ := bucket.Cursor().Last()
-			p.Logf("querying since %d", last)
-
-			// for _, channels := range res {
-			// 	next, _ := bucket.NextSequence()
-			// 	p.Logf("saving channel %v at sequence %d", channel, next)
-			// }
-
-			return nil
-		})
-
-		time.Sleep(15 * time.Minute)
-	}
 }
