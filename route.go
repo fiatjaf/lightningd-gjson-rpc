@@ -109,7 +109,6 @@ func (g *Graph) Sync() error {
 			Source:              source,
 			Destination:         destination,
 			ShortChannelID:      ch.Get("short_channel_id").String(),
-			Satoshis:            ch.Get("satoshis").Int(),
 			BaseFeeMillisatoshi: ch.Get("base_fee_millisatoshi").Int(),
 			FeePerMillionth:     ch.Get("fee_per_millionth").Int(),
 			Delay:               ch.Get("delay").Int(),
@@ -135,7 +134,6 @@ type Channel struct {
 	Source              string `json:"source"`
 	Destination         string `json:"destination"`
 	ShortChannelID      string `json:"short_channel_id"`
-	Satoshis            int64  `json:"satoshis"`
 	BaseFeeMillisatoshi int64  `json:"base_fee_millisatoshi"`
 	FeePerMillionth     int64  `json:"fee_per_millionth"`
 	Delay               int64  `json:"delay"`
