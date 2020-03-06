@@ -264,7 +264,16 @@ func onInit(p *plugin.Plugin) {
 		if server == "" {
 			continue
 		}
-		serverlist[server] = true
+
+		// server may have an address, or it can be blank
+		// if it exists we store it and use to connect later
+		address := ""
+		if spl := strings.Split(server, "@"); len(spl) == 2 {
+			server = spl[0]
+			address = "@" + spl[1]
+		}
+
+		serverlist[server] = address
 	}
 
 	// create local channel bucket
@@ -283,7 +292,7 @@ func onInit(p *plugin.Plugin) {
 	})
 
 	// connect and fetch channels from servers
-	for server, _ := range serverlist {
+	for server, address := range serverlist {
 		db.View(func(tx *bbolt.Tx) error {
 			bucket := tx.Bucket([]byte(server))
 			stats := bucket.Stats()
@@ -295,6 +304,8 @@ func onInit(p *plugin.Plugin) {
 
 			// we send this and then expect the server to send
 			// all available channels to us
+			p.Client.Call("connect", server+address)
+
 			_, err = p.Client.Call("dev-sendcustommsg", server,
 				strconv.FormatInt(MSG_REQUEST_CHANNELS, 16)+
 					strconv.FormatInt(last, 16))

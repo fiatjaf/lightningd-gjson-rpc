@@ -18,7 +18,7 @@ var (
 		"btc":  100000000000,
 	}
 	channelswaitingtosend = map[string]*lightning.Channel{}
-	serverlist            = make(map[string]bool)
+	serverlist            = make(map[string]string)
 )
 
 var db *bbolt.DB
