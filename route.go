@@ -70,9 +70,6 @@ func (g *Graph) SearchDualBFS(start string, end string) (path []*Channel) {
 
 				// check for a match
 				if routeFrom, ok := fromEnd[channel.Destination]; ok {
-					// check route fee
-					// TODO
-
 					// combine routes and return
 					return append(routeUntilNext, routeFrom...)
 				}
@@ -90,7 +87,7 @@ func (g *Graph) Sync() error {
 	g.channelsTo = make(map[string][]*Channel)
 	g.channelMap = make(map[string]*Channel)
 
-	// get data from normal LN gossip
+	// get channels data
 	res, err := g.client.Call("listchannels")
 	if err != nil {
 		return err
@@ -125,9 +122,6 @@ func (g *Graph) Sync() error {
 		g.channelsTo[channel.Destination] = append(g.channelsTo[channel.Destination], channel)
 		g.channelMap[channel.ShortChannelID+"/"+strconv.Itoa(channel.Direction)] = channel
 	}
-
-	// get data from our custom servers
-	// TODO
 
 	// reset counter
 	lastSynced = time.Now()
