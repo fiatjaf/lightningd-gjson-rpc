@@ -88,7 +88,7 @@ func (g *Graph) Sync() error {
 	g.channelMap = make(map[string]*Channel)
 
 	// get channels data
-	res, err := g.client.Call("listchannels")
+	res, err := g.client.CallWithCustomTimeout(time.Second*30, "listchannels")
 	if err != nil {
 		return err
 	}

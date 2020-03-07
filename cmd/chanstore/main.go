@@ -44,7 +44,7 @@ func main() {
 			},
 			{
 				"chanstore-price",
-				"integer",
+				"int",
 				72,
 				"Satoshi price to ask for peers to include a channel.",
 			},
