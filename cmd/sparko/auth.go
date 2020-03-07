@@ -3,12 +3,17 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 )
 
 func defaultAuth(r *http.Request) error {
+	if accessKey == "" {
+		return errors.New("no default login credentials set")
+	}
+
 	if r.Header.Get("X-Access") == accessKey {
 		return nil
 	}
@@ -34,6 +39,7 @@ func defaultAuth(r *http.Request) error {
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
+
 		if path == "" || path == "rpc" || path == "stream" {
 			// default key / login
 			if err := defaultAuth(r); err == nil {
@@ -76,7 +82,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// if you know where the manifest is you can have it
-		if path == "manifest-"+manifestKey+"/manifest.json" {
+		if manifestKey != "" && path == "manifest-"+manifestKey+"/manifest.json" {
 			r.URL.Path = "/manifest/manifest.json"
 		}
 

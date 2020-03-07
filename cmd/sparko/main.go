@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/elazarl/go-bindata-assetfs"
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
-	"github.com/fiatjaf/ln-decodepay"
+	decodepay "github.com/fiatjaf/ln-decodepay"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 )
@@ -28,7 +28,7 @@ const DEFAULTPORT = "9737"
 func main() {
 	p := plugin.Plugin{
 		Name:    "sparko",
-		Version: "v1.4",
+		Version: "v1.5",
 		Options: []plugin.Option{
 			{"sparko-host", "string", "127.0.0.1", "http(s) server listen address"},
 			{"sparko-port", "string", DEFAULTPORT, "http(s) server port"},
