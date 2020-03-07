@@ -182,7 +182,7 @@ func main() {
 
 					return struct {
 						Amount int64  `json:"amount"`
-						Script string `json:"string"`
+						Script string `json:"script"`
 					}{output.Value, output.ScriptPubKey}, 0, nil
 				},
 			},
