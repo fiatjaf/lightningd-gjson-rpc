@@ -110,10 +110,14 @@ func main() {
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
 					blocks := params.Get("blocks").Int()
 
-					rates, err := getFeeRates()
+					rates, cacheHit, err := getFeeRates()
 					if err != nil {
 						p.Logf("failed to call btcpriceequivalent.com fee-estimates: %s", err.Error())
 						return nil, 21, fmt.Errorf("failed to get fee estimates: %s", err.Error())
+					}
+
+					if verbose && !cacheHit {
+						p.Logf("fees estimated: %v", rates)
 					}
 
 					feerate := rates[0].Amount
@@ -122,10 +126,6 @@ func main() {
 							break
 						}
 						feerate = rate.Amount
-					}
-
-					if verbose {
-						p.Logf("fee estimated: %d for %d blocks", feerate, blocks)
 					}
 
 					return struct {
@@ -259,14 +259,14 @@ type FeeRate struct {
 var feeCache []FeeRate
 var feeCacheTime = time.Now().Add(-time.Hour * 1)
 
-func getFeeRates() (rates []FeeRate, err error) {
+func getFeeRates() (rates []FeeRate, cacheHit bool, err error) {
 	if feeCacheTime.After(time.Now().Add(-time.Minute * 10)) {
-		return feeCache, nil
+		return feeCache, true, nil
 	}
 
 	w, err := http.Get("https://btcpriceequivalent.com/fee-estimates")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	defer w.Body.Close()
@@ -275,11 +275,11 @@ func getFeeRates() (rates []FeeRate, err error) {
 	sep := bytes.Index(data, []byte{'='})
 	err = json.Unmarshal(data[sep+1:], &rates)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	feeCache = rates
 	feeCacheTime = time.Now()
 
-	return rates, nil
+	return rates, false, nil
 }

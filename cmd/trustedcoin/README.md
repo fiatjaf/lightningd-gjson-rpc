@@ -4,7 +4,7 @@ A plugin that uses block explorers (blockstream.info, buybitcoinworldwide.com an
 
 This isn't what you should be doing, but sometimes you may need it.
 
-(Remember this will download all blocks c-lightning needs from blockchain.info.)
+(Remember this will download all blocks c-lightning needs from blockchain.info in raw, hex format.)
 
 ## How to install
 
