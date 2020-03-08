@@ -53,13 +53,19 @@ func main() {
 			{
 				"rpc_command",
 				func(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
-					rpc_command := payload.Get("rpc_command.rpc_command")
+					rpc_command := payload.Get("rpc_command")
 
 					switch rpc_command.Get("method").String() {
 					case "getroute":
 						return getroute(p, rpc_command)
 					case "listchannels":
 						return listchannels(p, rpc_command)
+					case "dev-sendcustommsg":
+						p.Log("dev-sendcustommsg: ", payload.Get("rpc_command").String())
+
+						return map[string]interface{}{
+							"result": "continue",
+						}
 					default:
 						return continuehook
 					}

@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	REPLY_INVOICE        = 63241
-	REPLY_CHANNEL        = 63243
-	MSG_REQUEST_INVOICE  = 63245
-	MSG_ADD_CHANNEL      = 63247
-	MSG_REPORT_CHANNEL   = 63249
-	MSG_REQUEST_CHANNELS = 63251
+	REPLY_INVOICE        = 6341
+	REPLY_CHANNEL        = 6343
+	MSG_REQUEST_INVOICE  = 6345
+	MSG_ADD_CHANNEL      = 6347
+	MSG_REPORT_CHANNEL   = 6349
+	MSG_REQUEST_CHANNELS = 6351
 
 	PROBE_AMOUNT = 100000
 )
@@ -31,7 +31,9 @@ func custommsg(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
 	message := payload.Get("message").String()
 	resp = continuehook
 
-	code, err := strconv.ParseInt(message[:4], 16, 64)
+	p.Logf("got message: %s from %s", message, peer)
+
+	code, err := strconv.ParseInt(message[8:10], 16, 64)
 	if err != nil {
 		p.Logf("got invalid custommsg: %s (%s)", message, err.Error())
 		return
@@ -57,7 +59,7 @@ func custommsg(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
 	case MSG_ADD_CHANNEL:
 		// receive a channel to be added to the database
 		var halfchannels []lightning.Channel
-		data, _ := hex.DecodeString(message[4:])
+		data, _ := hex.DecodeString(message[10:])
 		err := json.Unmarshal(data, &halfchannels)
 		if err != nil {
 			p.Logf("invalid channel-add message: %s", err.Error())
@@ -174,7 +176,7 @@ func custommsg(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
 		db.View(func(tx *bbolt.Tx) error {
 			c := tx.Bucket([]byte("server")).Cursor()
 
-			since, _ := hex.DecodeString(message[4:])
+			since, _ := hex.DecodeString(message[10:])
 			for _, v := c.Seek(since); v != nil; _, v = c.Next() {
 				_, err = p.Client.Call("dev-sendcustommsg", peer,
 					strconv.FormatInt(REPLY_CHANNEL, 16)+
@@ -190,7 +192,7 @@ func custommsg(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
 		// if is from a server we trust, add it to our database
 		if _, ok := serverlist[peer]; ok {
 			var halfchannels []lightning.Channel
-			data, _ := hex.DecodeString(message[4:])
+			data, _ := hex.DecodeString(message[10:])
 			err := json.Unmarshal(data, &halfchannels)
 			if err != nil {
 				p.Logf("invalid channel-reply message: %s", err.Error())
@@ -218,7 +220,7 @@ func custommsg(p *plugin.Plugin, payload plugin.Params) (resp interface{}) {
 		// if this is expected, pay the invoice and send the channel
 		if channel, ok := channelswaitingtosend[peer]; ok {
 			// it is expected (we've requested this invoice earlier)
-			bbolt11, err := hex.DecodeString(message[4:])
+			bbolt11, err := hex.DecodeString(message[10:])
 			if err != nil {
 				p.Logf("invalid invoice-reply: %s", err.Error())
 				return
@@ -301,6 +303,7 @@ func onInit(p *plugin.Plugin) {
 			// so we can tell the server and expect all the new stuff
 			last := int64(stats.KeyN - 1)
 			p.Logf("querying %s since %d", server, last)
+			jlast, _ := json.Marshal(last)
 
 			// we send this and then expect the server to send
 			// all available channels to us
@@ -308,7 +311,7 @@ func onInit(p *plugin.Plugin) {
 
 			_, err = p.Client.Call("dev-sendcustommsg", server,
 				strconv.FormatInt(MSG_REQUEST_CHANNELS, 16)+
-					strconv.FormatInt(last, 16))
+					hex.EncodeToString(jlast))
 			if err != nil {
 				p.Logf("error sending channels-request: %s", err.Error())
 				return nil
