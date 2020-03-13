@@ -47,9 +47,6 @@ func main() {
 
 					if blockhash == "" {
 						// block not mined yet
-						if verbose {
-							p.Logf("block %d not available yet", height)
-						}
 						return blockUnavailable, 0, nil
 					}
 
