@@ -2,12 +2,8 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"strconv"
-	"time"
+	"math/rand"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
 )
@@ -18,7 +14,21 @@ var (
 		"blockhash": nil,
 		"block":     nil,
 	}
+	esplora = []string{
+		"https://mempool.ninja/electrs",
+		"https://blockstream.info/api",
+	}
 )
+
+func esploras() (ss []string) {
+	n := len(esplora)
+	index := rand.Intn(10)
+	ss = make([]string, n)
+	for i := 0; i < n; i++ {
+		ss[i] = esplora[index%n]
+	}
+	return ss
+}
 
 func main() {
 	p := plugin.Plugin{
@@ -40,42 +50,26 @@ func main() {
 				"",
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
 					height := params.Get("height").Int()
-					blockhash, err := getHash(height)
-					if err != nil {
-						return nil, 18, fmt.Errorf("failed to get %d hash: %s", height, err.Error())
+					if verbose {
+						p.Logf("getting block %d", height)
 					}
 
-					if blockhash == "" {
-						// block not mined yet
+					block, hash, err := getBlock(height)
+					if err != nil {
+						return nil, 19, err
+					}
+					if block == "" {
 						return blockUnavailable, 0, nil
 					}
 
 					if verbose {
-						p.Logf("getting block %d: %s", height, blockhash)
-					}
-					w, err := http.Get(fmt.Sprintf("https://blockchain.info/block/%s?format=hex", blockhash))
-					if err != nil {
-						return nil, 19, fmt.Errorf("failed to get raw block %d from blockchain.com: %s", height, err.Error())
-					}
-					defer w.Body.Close()
-
-					block, _ := ioutil.ReadAll(w.Body)
-					if len(block) < 100 {
-						// block not available on blockchain.info yet
-						if verbose {
-							p.Logf("block %d not available yet", height)
-						}
-						return blockUnavailable, 0, nil
-					}
-
-					if verbose {
-						p.Logf("returning block %d: %s...", height, string(block[:50]))
+						p.Logf("returning block %d, %s…, %d bytes", height, string(hash[:26]), len(block)/2)
 					}
 
 					return struct {
 						BlockHash string `json:"blockhash"`
 						Block     string `json:"block"`
-					}{blockhash, string(block)}, 0, nil
+					}{hash, string(block)}, 0, nil
 				},
 			}, {
 				"getchaininfo",
@@ -138,27 +132,15 @@ func main() {
 					hex := params.Get("tx").String()
 					tx := bytes.NewBufferString(hex)
 
-					w, err := http.Post("https://blockstream.info/api/tx", "text/plain", tx)
+					srtresp, err := sendRawTransaction(tx)
 					if err != nil {
-						p.Logf("failed to call publish transaction on blockstream.info: %s", hex, err.Error())
+						p.Logf("failed to publish transaction %s: %s", hex, err.Error())
 						return nil, 21, err
 					}
-					defer w.Body.Close()
 
 					p.Logf("sent raw transaction: %s", hex)
 
-					if w.StatusCode >= 300 {
-						msg, _ := ioutil.ReadAll(w.Body)
-						return struct {
-							Success bool   `json:"success"`
-							ErrMsg  string `json:"errmsg"`
-						}{false, string(msg)}, 0, nil
-					}
-
-					return struct {
-						Success bool   `json:"success"`
-						ErrMsg  string `json:"errmsg"`
-					}{true, ""}, 0, nil
+					return srtresp, 0, nil
 				},
 			}, {
 				"getutxout",
@@ -190,93 +172,4 @@ func main() {
 	}
 
 	p.Run()
-}
-
-func getTip() (int64, error) {
-	w, err := http.Get("https://blockstream.info/api/blocks/tip/height")
-	if err != nil {
-		return 0, err
-	}
-	defer w.Body.Close()
-
-	data, err := ioutil.ReadAll(w.Body)
-	if err != nil {
-		return 0, err
-	}
-
-	tip, err := strconv.ParseInt(string(data), 10, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	return tip, nil
-}
-
-func getHash(height int64) (string, error) {
-	w, err := http.Get(fmt.Sprintf("https://blockstream.info/api/block-height/%d", height))
-	if err != nil {
-		return "", err
-	}
-	defer w.Body.Close()
-
-	if w.StatusCode >= 404 {
-		return "", nil
-	}
-
-	data, err := ioutil.ReadAll(w.Body)
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
-}
-
-func getTransaction(txid string) (tx struct {
-	TXID string `json:"txid"`
-	Vout []struct {
-		ScriptPubKey string `json:"scriptPubKey"`
-		Value        int64  `json:"value"`
-	} `json:"vout"`
-}, err error) {
-	w, err := http.Get("https://blockstream.info/api/tx/" + txid)
-	if err != nil {
-		return
-	}
-	defer w.Body.Close()
-
-	err = json.NewDecoder(w.Body).Decode(&tx)
-	return
-}
-
-type FeeRate struct {
-	N      int64 `json:"n"`
-	Amount int64 `json:"amount"`
-}
-
-var feeCache []FeeRate
-var feeCacheTime = time.Now().Add(-time.Hour * 1)
-
-func getFeeRates() (rates []FeeRate, cacheHit bool, err error) {
-	if feeCacheTime.After(time.Now().Add(-time.Minute * 10)) {
-		return feeCache, true, nil
-	}
-
-	w, err := http.Get("https://btcpriceequivalent.com/fee-estimates")
-	if err != nil {
-		return nil, false, err
-	}
-
-	defer w.Body.Close()
-	data, _ := ioutil.ReadAll(w.Body)
-
-	sep := bytes.Index(data, []byte{'='})
-	err = json.Unmarshal(data[sep+1:], &rates)
-	if err != nil {
-		return nil, false, err
-	}
-
-	feeCache = rates
-	feeCacheTime = time.Now()
-
-	return rates, false, nil
 }
