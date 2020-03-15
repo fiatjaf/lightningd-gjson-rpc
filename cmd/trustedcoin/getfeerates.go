@@ -27,11 +27,11 @@ var feeCache FeeRates
 var feeCacheTime = time.Now().Add(-time.Hour * 1)
 
 func getFeeRates() (rates FeeRates, cacheHit bool, err error) {
-	if feeCacheTime.After(time.Now().Add(-time.Minute * 5)) {
+	if feeCacheTime.After(time.Now().Add(-time.Minute * 1)) {
 		return feeCache, true, nil
 	}
 
-	for _, try := range []func() (FeeRates, error){feeFromBTCPriceEquivalent, feeFromEsplora} {
+	for _, try := range []func() (FeeRates, error){feeFromEsplora, feeFromBTCPriceEquivalent} {
 		rates, err = try()
 		if err != nil {
 			continue
