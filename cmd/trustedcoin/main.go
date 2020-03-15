@@ -121,7 +121,7 @@ func main() {
 
 					return struct {
 						FeeRate int64 `json:"feerate"`
-					}{feerate}, 0, nil
+					}{feerate * 100000}, 0, nil
 				},
 			}, {
 				"sendrawtransaction",
