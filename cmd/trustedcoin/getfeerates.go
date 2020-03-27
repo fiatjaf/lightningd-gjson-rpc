@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sort"
-	"strconv"
 	"time"
 )
 
@@ -31,7 +29,7 @@ func getFeeRates() (rates FeeRates, cacheHit bool, err error) {
 		return feeCache, true, nil
 	}
 
-	for _, try := range []func() (FeeRates, error){feeFromEsplora, feeFromBTCPriceEquivalent} {
+	for _, try := range []func() (FeeRates, error){feeFromBTCPriceEquivalent} {
 		rates, err = try()
 		if err != nil {
 			continue
@@ -66,50 +64,4 @@ func feeFromBTCPriceEquivalent() (FeeRates, error) {
 	}
 
 	return rates, nil
-}
-
-func feeFromEsplora() (rates FeeRates, err error) {
-	for _, endpoint := range esploras() {
-		u := endpoint + "/fee-estimates"
-		w, err := http.Get(u)
-		if err != nil {
-			return nil, err
-		}
-		if w.StatusCode >= 300 {
-			return nil, fmt.Errorf("%s returned an error code: %d", u, w.StatusCode)
-		}
-
-		defer w.Body.Close()
-		data, _ := ioutil.ReadAll(w.Body)
-
-		estimates := make(map[string]float64)
-		err = json.Unmarshal(data, &estimates)
-		if err != nil {
-			return nil, err
-		}
-
-		rates := make(FeeRates, len(estimates))
-		i := 0
-		for sblocks, sats := range estimates {
-			var blocks int64
-			blocks, err = strconv.ParseInt(sblocks, 10, 64)
-			if err != nil {
-				break
-			}
-
-			rates[i] = FeeRate{
-				N:      blocks,
-				Amount: int64(sats),
-			}
-			i++
-		}
-
-		if len(rates) < 9 {
-			err = errors.New("invalid response from " + u)
-			break
-		}
-		return rates, nil
-	}
-
-	return
 }
