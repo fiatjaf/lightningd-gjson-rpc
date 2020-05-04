@@ -6,6 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
+	"github.com/kr/pretty"
 )
 
 var (
@@ -94,34 +95,50 @@ func main() {
 					}{"main", tip, tip, false}, 0, nil
 				},
 			}, {
-				"getfeerate",
-				"blocks [mode]",
+				"estimatefees",
+				"",
 				"Get the Bitcoin feerate in btc/kilo-vbyte.",
 				"",
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
-					blocks := params.Get("blocks").Int()
-
-					rates, cacheHit, err := getFeeRates()
+					// just copy sauron here
+					feerates, err := getFeeRatesFromEsplora()
 					if err != nil {
-						p.Logf("failed to call btcpriceequivalent.com fee-estimates: %s", err.Error())
-						return nil, 21, fmt.Errorf("failed to get fee estimates: %s", err.Error())
+						p.Logf("estimatefees error: %s", err.Error())
+						return EstimatedFees{nil, nil, nil, nil, nil, nil, nil, nil},
+							0, nil
 					}
 
-					if verbose && !cacheHit {
-						p.Logf("fees estimated: %v", rates)
-					}
+					var (
+						slow        = int(feerates["504"] * 1000)
+						normal      = int(feerates["10"] * 1000)
+						urgent      = int(feerates["5"] * 1000)
+						very_urgent = int(feerates["2"] * 1000)
 
-					feerate := rates[0].Amount
-					for _, rate := range rates {
-						if blocks < rate.N {
-							break
-						}
-						feerate = rate.Amount
-					}
+						intp = func(x int) *int { return &x }
+					)
 
-					return struct {
-						FeeRate int64 `json:"feerate"`
-					}{feerate * 100000}, 0, nil
+					pretty.Log(EstimatedFees{
+						Opening:         intp(slow),
+						MutualClose:     intp(normal),
+						UnilateralClose: intp(very_urgent),
+						DelayedToUs:     intp(slow),
+						HTLCResolution:  intp(normal),
+						Penalty:         intp(urgent),
+						MinAcceptable:   intp(slow / 2),
+						MaxAcceptable:   intp(very_urgent * 100),
+					})
+
+					// actually let's be a little more patient here than sauron is
+					return EstimatedFees{
+						Opening:         intp(slow),
+						MutualClose:     intp(normal),
+						UnilateralClose: intp(very_urgent),
+						DelayedToUs:     intp(slow),
+						HTLCResolution:  intp(normal),
+						Penalty:         intp(urgent),
+						MinAcceptable:   intp(slow / 2),
+						MaxAcceptable:   intp(very_urgent * 100),
+					}, 0, nil
 				},
 			}, {
 				"sendrawtransaction",
