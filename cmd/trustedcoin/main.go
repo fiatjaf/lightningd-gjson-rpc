@@ -6,15 +6,10 @@ import (
 	"math/rand"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
-	"github.com/kr/pretty"
 )
 
 var (
-	verbose          = true
-	blockUnavailable = map[string]interface{}{
-		"blockhash": nil,
-		"block":     nil,
-	}
+	verbose = true
 	esplora = []string{
 		"https://mempool.ninja/electrs",
 		"https://blockstream.info/api",
@@ -55,16 +50,23 @@ func main() {
 						p.Logf("getting block %d", height)
 					}
 
+					blockUnavailable := map[string]interface{}{
+						"blockhash": nil,
+						"block":     nil,
+					}
+
 					block, hash, err := getBlock(height)
 					if err != nil {
-						return nil, 19, err
+						p.Logf("getblock error: %s", err.Error())
+						return blockUnavailable, 0, nil
 					}
 					if block == "" {
 						return blockUnavailable, 0, nil
 					}
 
 					if verbose {
-						p.Logf("returning block %d, %s…, %d bytes", height, string(hash[:26]), len(block)/2)
+						p.Logf("returning block %d, %s…, %d bytes",
+							height, string(hash[:26]), len(block)/2)
 					}
 
 					return struct {
@@ -117,17 +119,6 @@ func main() {
 						intp = func(x int) *int { return &x }
 					)
 
-					pretty.Log(EstimatedFees{
-						Opening:         intp(slow),
-						MutualClose:     intp(normal),
-						UnilateralClose: intp(very_urgent),
-						DelayedToUs:     intp(slow),
-						HTLCResolution:  intp(normal),
-						Penalty:         intp(urgent),
-						MinAcceptable:   intp(slow / 2),
-						MaxAcceptable:   intp(very_urgent * 100),
-					})
-
 					// actually let's be a little more patient here than sauron is
 					return EstimatedFees{
 						Opening:         intp(slow),
@@ -171,15 +162,12 @@ func main() {
 					tx, err := getTransaction(txid)
 					if err != nil {
 						p.Logf("failed to get tx %s: %s", txid, err.Error())
-						return nil, 22, fmt.Errorf("failed to get tx %s: %s", txid, err.Error())
+						return UTXOResponse{nil, nil}, 0, nil
 					}
 
 					output := tx.Vout[vout]
 
-					return struct {
-						Amount int64  `json:"amount"`
-						Script string `json:"script"`
-					}{output.Value, output.ScriptPubKey}, 0, nil
+					return UTXOResponse{&output.Value, &output.ScriptPubKey}, 0, nil
 				},
 			},
 		},

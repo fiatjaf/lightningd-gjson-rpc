@@ -5,6 +5,11 @@ import (
 	"net/http"
 )
 
+type UTXOResponse struct {
+	Amount *int64  `json:"amount"`
+	Script *string `json:"script"`
+}
+
 func getTransaction(txid string) (tx struct {
 	TXID string `json:"txid"`
 	Vout []struct {
