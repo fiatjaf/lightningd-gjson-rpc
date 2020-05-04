@@ -10,7 +10,7 @@ import (
 
 var (
 	esplora = []string{
-		"https://mempool.ninja/electrs",
+		"https://mempool.space/electrs",
 		"https://blockstream.info/api",
 	}
 )

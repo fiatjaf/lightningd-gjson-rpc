@@ -1,6 +1,6 @@
 ## The `trustedcoin` plugin.
 
-A plugin that uses block explorers (blockstream.info, buybitcoinworldwide.com and blockchain.info) as backends instead of your own Bitcoin node.
+A plugin that uses block explorers (blockstream.info, mempool.space, blockchain.com and blockchain.info) as backends instead of your own Bitcoin node.
 
 This isn't what you should be doing, but sometimes you may need it.
 
