@@ -23,10 +23,18 @@ type Plugin struct {
 	RPCMethods    []RPCMethod    `json:"rpcmethods"`
 	Subscriptions []Subscription `json:"subscriptions"`
 	Hooks         []Hook         `json:"hooks"`
+	Features      Features       `json:"features"`
 	Dynamic       bool           `json:"dynamic"`
 
 	Args   Params        `json:"-"`
 	OnInit func(*Plugin) `json:"-"`
+}
+
+type Features struct {
+	Node    string `json:"features"`
+	Channel string `json:"channel"`
+	Init    string `json:"init"`
+	Invoice string `json:"invoice"`
 }
 
 type Option struct {
