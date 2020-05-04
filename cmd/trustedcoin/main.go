@@ -9,7 +9,6 @@ import (
 )
 
 var (
-	verbose = true
 	esplora = []string{
 		"https://mempool.ninja/electrs",
 		"https://blockstream.info/api",
@@ -30,14 +29,6 @@ func main() {
 	p := plugin.Plugin{
 		Name:    "trustedcoin",
 		Version: "v0.1",
-		Options: []plugin.Option{
-			{
-				"trustedcoin-verbose",
-				"bool",
-				true,
-				"See how trustedcoin is being used before you decide to turn this off.",
-			},
-		},
 		RPCMethods: []plugin.RPCMethod{
 			{
 				"getrawblockbyheight",
@@ -46,9 +37,6 @@ func main() {
 				"",
 				func(p *plugin.Plugin, params plugin.Params) (resp interface{}, errCode int, err error) {
 					height := params.Get("height").Int()
-					if verbose {
-						p.Logf("getting block %d", height)
-					}
 
 					blockUnavailable := map[string]interface{}{
 						"blockhash": nil,
@@ -64,10 +52,8 @@ func main() {
 						return blockUnavailable, 0, nil
 					}
 
-					if verbose {
-						p.Logf("returning block %d, %s…, %d bytes",
-							height, string(hash[:26]), len(block)/2)
-					}
+					p.Logf("returning block %d, %s…, %d bytes",
+						height, string(hash[:26]), len(block)/2)
 
 					return struct {
 						BlockHash string `json:"blockhash"`
@@ -85,9 +71,7 @@ func main() {
 						return nil, 20, fmt.Errorf("failed to get tip: %s", err.Error())
 					}
 
-					if verbose {
-						p.Logf("tip: %d", tip)
-					}
+					p.Logf("tip: %d", tip)
 
 					return struct {
 						Chain       string `json:"chain"`
@@ -170,9 +154,6 @@ func main() {
 					return UTXOResponse{&output.Value, &output.ScriptPubKey}, 0, nil
 				},
 			},
-		},
-		OnInit: func(p *plugin.Plugin) {
-			verbose = p.Args.Get("trustedcoin-verbose").Bool()
 		},
 	}
 

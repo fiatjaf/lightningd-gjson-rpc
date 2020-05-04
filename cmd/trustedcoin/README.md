@@ -19,5 +19,3 @@ Also call `chmod -x bcli` so the `bcli` plugin that comes installed by default d
 ## How to use
 
 You don't have to do anything, this will just work.
-
-When you're tired of watching the verbose logs `trustedcoin` will output (in the middle of `lightningd`s logs) you can set `trustedcoin-verbose=0` in your config.
