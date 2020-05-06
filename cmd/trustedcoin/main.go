@@ -28,7 +28,7 @@ func esploras() (ss []string) {
 func main() {
 	p := plugin.Plugin{
 		Name:    "trustedcoin",
-		Version: "v0.1",
+		Version: "v0.2",
 		RPCMethods: []plugin.RPCMethod{
 			{
 				"getrawblockbyheight",

@@ -32,7 +32,7 @@ func getBlock(height int64) (block, hash string, err error) {
 			continue
 		}
 
-		// verify proof-of-work and hash
+		// verify and hash
 		blockbytes, errW := hex.DecodeString(blockhex)
 		if err != nil {
 			err = errW
@@ -106,7 +106,7 @@ func blockFromBlockchainInfo(hash string) (string, error) {
 
 	block, _ := ioutil.ReadAll(w.Body)
 	if len(block) < 100 {
-		// block not available on here yet
+		// block not available here yet
 		return "", nil
 	}
 
