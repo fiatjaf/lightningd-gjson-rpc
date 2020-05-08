@@ -11,6 +11,7 @@ import (
 	decodepay "github.com/fiatjaf/ln-decodepay"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
+	"github.com/rs/cors"
 )
 
 var err error
@@ -28,7 +29,7 @@ const DEFAULTPORT = "9737"
 func main() {
 	p := plugin.Plugin{
 		Name:    "sparko",
-		Version: "v1.5",
+		Version: "v2.0",
 		Options: []plugin.Option{
 			{"sparko-host", "string", "127.0.0.1", "http(s) server listen address"},
 			{"sparko-port", "string", DEFAULTPORT, "http(s) server port"},
@@ -36,6 +37,7 @@ func main() {
 			{"sparko-keys", "string", nil, "semicolon-separated list of key-permissions pairs"},
 			{"sparko-tls-path", "string", nil, "directory to read/store key.pem and cert.pem for TLS (relative to your lightning directory)"},
 			{"sparko-letsencrypt-email", "string", nil, "email in which LetsEncrypt will notify you and other things"},
+			{"sparko-allow-cors", "bool", false, "allow CORS"},
 		},
 		RPCMethods: []plugin.RPCMethod{
 			{
@@ -57,27 +59,29 @@ func main() {
 			{
 				"invoice_payment",
 				func(p *plugin.Plugin, params plugin.Params) {
-					label := params["invoice_payment"].(map[string]interface{})["label"].(string)
+					// serve both events
+
+					// our generic one
+					subscribeSSE("invoice_payment").Handler(p, params)
+
+					// and the one spark wants
+					label := params.Get("invoice_payment.label").String()
 					inv, err := p.Client.Call("waitinvoice", label)
 					if err != nil {
-						p.Log("Failed to get invoice on invoice_payment notification: " + err.Error())
+						p.Logf("Failed to get invoice on inv-paid notification: %s", err)
 						return
 					}
 					ee <- event{typ: "inv-paid", data: inv.String()}
 				},
 			},
-			{
-				"sendpay_success",
-				func(p *plugin.Plugin, params plugin.Params) {
-					payload := params["sendpay_success"]
-					jpay, err := json.Marshal(payload)
-					if err != nil {
-						p.Log("Failed to encode payment success info: " + err.Error())
-						return
-					}
-					ee <- event{typ: "pay-sent", data: string(jpay)}
-				},
-			},
+			subscribeSSE("channel_opened"),
+			subscribeSSE("connect"),
+			subscribeSSE("disconnect"),
+			subscribeSSE("warning"),
+			subscribeSSE("forward_event"),
+			subscribeSSE("sendpay_success"),
+			subscribeSSE("sendpay_failure"),
+			subscribeSSE("sendpay_success"),
 		},
 		OnInit: func(p *plugin.Plugin) {
 			// compute access key
@@ -95,7 +99,11 @@ func main() {
 					p.Log("Error reading permissions config: " + err.Error())
 					return
 				}
-				p.Log("Keys read: " + keys.String())
+				message, nkeys := keys.Summary()
+				p.Logf("%d keys read: %s", nkeys, message)
+				if nkeys == 0 {
+					p.Log("DANGER: All methods are free for anyone to call without authorization.")
+				}
 			}
 
 			// start eventsource thing
@@ -103,13 +111,14 @@ func main() {
 
 			// declare routes
 			router := mux.NewRouter()
+
 			router.Use(authMiddleware)
-			router.Path("/stream").Methods("GET").Handler(es)
-			router.Path("/rpc").Methods("POST").Handler(
-				gziphandler.GzipHandler(
-					http.HandlerFunc(handleRPC),
-				),
+			router.Use(gziphandler.GzipHandler)
+
+			router.Path("/stream").Methods("GET").Handler(
+				checkStreamPermission(es),
 			)
+			router.Path("/rpc").Methods("POST").Handler(http.HandlerFunc(handleRPC))
 
 			if login != "" {
 				// web ui
@@ -130,9 +139,23 @@ func main() {
 			}
 
 			// start server
-			listen(p, router)
+			if p.Args.Get("sparko-allow-cors").Bool() {
+				listen(p, cors.AllowAll().Handler(router))
+			} else {
+				listen(p, router)
+			}
 		},
 	}
 
 	p.Run()
+}
+
+func subscribeSSE(kind string) plugin.Subscription {
+	return plugin.Subscription{
+		kind,
+		func(p *plugin.Plugin, params plugin.Params) {
+			j, _ := json.Marshal(params)
+			ee <- event{typ: kind, data: string(j)}
+		},
+	}
 }

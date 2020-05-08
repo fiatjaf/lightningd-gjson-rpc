@@ -16,6 +16,21 @@ type event struct {
 	data string
 }
 
+func checkStreamPermission(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if permissions, ok := r.Context().Value("permissions").(map[string]bool); ok {
+			if len(permissions) > 0 {
+				if _, allowed := permissions["stream"]; !allowed {
+					w.WriteHeader(401)
+					return
+				}
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func startStreams(p *plugin.Plugin) eventsource.EventSource {
 	id := 1
 

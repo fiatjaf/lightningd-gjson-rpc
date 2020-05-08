@@ -13,7 +13,6 @@ func defaultAuth(r *http.Request) error {
 	if accessKey == "" {
 		return errors.New("no default login credentials set")
 	}
-
 	if r.Header.Get("X-Access") == accessKey {
 		return nil
 	}
@@ -62,7 +61,7 @@ func authMiddleware(next http.Handler) http.Handler {
 			}
 
 			// extra keys -- only access the /rpc endpoint
-			if path == "rpc" {
+			if path == "rpc" || path == "stream" {
 				for key, permissions := range keys {
 					if r.Header.Get("X-Access") == key {
 						r = r.WithContext(context.WithValue(

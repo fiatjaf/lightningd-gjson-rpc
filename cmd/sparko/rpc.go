@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/fiatjaf/lightningd-gjson-rpc"
+	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 )
 
 func handleRPC(w http.ResponseWriter, r *http.Request) {
@@ -17,17 +17,9 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check permissions
-	if permissions, ok := r.Context().Value("permissions").(PermissionSet); ok {
-		// if there are any allowed_methods, ignore disallowed_methods
-		// setting and disallow anything that is not explicitly allowed.
-		// otherwise only disallow what is explicitly disallowed.
-		if len(permissions.Allow) > 0 {
-			if _, allowed := permissions.Allow[req.Method]; !allowed {
-				w.WriteHeader(401)
-				return
-			}
-		} else {
-			if _, disallowed := permissions.Disallow[req.Method]; disallowed {
+	if permissions, ok := r.Context().Value("permissions").(map[string]bool); ok {
+		if len(permissions) > 0 {
+			if _, allowed := permissions[req.Method]; !allowed {
 				w.WriteHeader(401)
 				return
 			}

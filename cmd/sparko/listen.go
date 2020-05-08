@@ -11,11 +11,10 @@ import (
 	"strings"
 
 	"github.com/fiatjaf/lightningd-gjson-rpc/plugin"
-	"github.com/gorilla/mux"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-func listen(p *plugin.Plugin, router *mux.Router) {
+func listen(p *plugin.Plugin, router http.Handler) {
 	host, _ := p.Args.String("sparko-host")
 	port, _ := p.Args.String("sparko-port")
 	letsemail, _ := p.Args.String("sparko-letsencrypt-email")
