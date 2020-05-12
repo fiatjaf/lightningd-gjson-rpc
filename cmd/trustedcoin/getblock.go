@@ -34,13 +34,13 @@ func getBlock(height int64) (block, hash string, err error) {
 
 		// verify and hash
 		blockbytes, errW := hex.DecodeString(blockhex)
-		if err != nil {
+		if errW != nil {
 			err = errW
 			continue
 		}
 
 		blockparsed, errW := btcutil.NewBlockFromBytes(blockbytes)
-		if err != nil {
+		if errW != nil {
 			err = errW
 			continue
 		}
