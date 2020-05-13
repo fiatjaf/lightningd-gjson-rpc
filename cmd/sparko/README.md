@@ -33,7 +33,8 @@ sparko-port=9737
 
 # the tls path is just the directory where your self-signed key and certificate are.
 # (see below for code snippets that generate them on Linux)
-# the path is relative to your lightning-dir, so "sparko-tls" will translate to "~/.lightning/sparko-tls/"
+# the path is relative to your lightning-dir, so "sparko-tls" will translate to "~/.lightning/bitcoin/sparko-tls/"
+# (you can also use an absolute path)
 # if not specified the app will run without TLS (as http://)
 sparko-tls-path=sparko-tls
 
@@ -56,7 +57,8 @@ sparko-keys=masterkeythatcandoeverything; secretaccesskeythatcanreadstuff: getin
 To use TLS with a self-signed certificate (`https://`), generate your certificate first:
 
 ```
-cd ~/.lightning/sparko-tls/
+mkdir ~/.lightning/bitcoin/sparko-tls
+cd ~/.lightning/bitcoin/sparko-tls/
 openssl genrsa -out key.pem 2048
 openssl req -new -x509 -sha256 -key key.pem -out cert.pem -days 3650
 ```

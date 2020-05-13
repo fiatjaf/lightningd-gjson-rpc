@@ -91,9 +91,15 @@ func (ln *Client) callSpark(timeout time.Duration, body []byte) (res []byte, err
 		},
 	}
 
-	req, err := http.NewRequest("POST", ln.SparkURL, bytes.NewBuffer(body))
+	url := ln.SparkURL
+	if !strings.HasSuffix(url, "/rpc") {
+		url = strings.TrimSuffix(url, "/")
+		url += "/rpc"
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
-		err = ErrorConnect{ln.SparkURL, err.Error()}
+		err = ErrorConnect{url, err.Error()}
 		return
 	}
 	if ln.SparkToken != "" {
