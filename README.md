@@ -1,4 +1,4 @@
-Useful and fast interface for [lightningd](https://github.com/ElementsProject/lightning/). All methods return `[gjson.Result](https://godoc.org/github.com/tidwall/gjson#Result)`, which is a good thing and very fast. [Try the GJSON playground to learn](https://gjson.dev/).
+Useful and fast interface for [lightningd](https://github.com/ElementsProject/lightning/). All methods return [`gjson.Result`](https://godoc.org/github.com/tidwall/gjson#Result), which is a good thing and very fast. [Try the GJSON playground to learn](https://gjson.dev/).
 
 Since RPC calls are just relayed and wrapped, you can use **lightningd-gjson-rpc** to call [custom RPC methods](https://lightning.readthedocs.io/PLUGINS.html) if your node has a plugin enabled on it.
 
