@@ -1,4 +1,4 @@
-## The `sparko` plugin.
+# The `sparko` plugin.
 
 The famous [Spark wallet](https://github.com/shesek/spark-wallet) repackaged as a single-binary plugin.
 
@@ -15,7 +15,7 @@ It has some differences (advantages?) over the original Spark wallet:
 * Event streaming: makes it easy to write remote Lightning apps by exposing a [SSE stream](#listen-to-events) of all events (payments sent, received etc.) that happen on the node.
 * No default login: you don't have to expose "super user" credentials over your node. You can have only access-keys to specific methods. But you can define a login an password too, of course.
 
-## How to install
+# How to install
 
 This is distributed as a single binary for your delight (or you can compile it yourself with `go get`, or ask me for binaries for other systems if you need them).
 
@@ -23,7 +23,7 @@ This is distributed as a single binary for your delight (or you can compile it y
 
 You only need the binary you can get in [the releases page](https://github.com/fiatjaf/lightningd-gjson-rpc/releases), nothing else.
 
-## How to use
+# How to use
 
 Just configure the options you want in you `~/.lightning/config` file, like the following:
 
@@ -75,11 +75,11 @@ Then try to visit `http://sparko.mydomain.com/`. If all is well you should get r
 
 To expose Sparko over CORS (who knows why), add `sparko-allow-cors=true` to the config file.
 
-### Errors
+## Errors
 
 When starting `lightningd`, check the logs for errors regarding `sparko` initialization, they will be prefixed with `"plugin-sparko"`.
 
-### Call the HTTP RPC
+## Call the HTTP RPC
 
 Replace the following with your actual values:
 
@@ -87,10 +87,20 @@ Replace the following with your actual values:
 curl -k https://0.0.0.0:9737/rpc -d '{"method": "pay", "params": ["lnbc..."]}' -H 'X-Access masterkeythatcandoeverything'
 ```
 
-### Listen to events
+### `Range` headers
+
+You can also limit the number of things you're returning. For example, `listinvoices` and `listsendpays` tend to get out of hand quickly and you may not want to return all your invoices and payments. You can add a `Range` header to solve this issue:
+
+```
+curl -k https://0.0.0.0:9737/rpc -d '{"method": "listsendpays"}' -H 'X-Access masterkeythatcandoeverything' -H 'Range: payments=0-99'
+```
+
+The above means that `sparko` will take the response it gets from `lightningd` and slice the array contained in the key `"payments"` to get values between 0 and 99, i.e., the first 100 payments. You could get the last 50 payments, for example, by passing `-H 'Range: payments=-50'` and so on. This is method-agnostic (that's why you must supply the `payments=` parameter), so you can use it on other methods and even methods provided by other plugins.
+
+## Listen to events
 
 Sparko exposes a [SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) endpoint at `/stream` that emits [all events](https://lightning.readthedocs.io/PLUGINS.html#event-notifications) a plugin may receive, in raw format given by lightningd. In some cases that's what you want when developing applications that must talk to a Lightning node remotely, better than webhooks. There are libraries for listening to Server-Sent Events in all languages. The `/stream` endpoint requires the `stream` permission to be accessed.
 
-### Open the wallet UI
+## Open the wallet UI
 
 Visit `https://0.0.0.0:9737/`. Only available if `sparko-login` is provided.
