@@ -60,10 +60,12 @@ func authMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			// extra keys -- only access the /rpc endpoint
+			// extra keys -- only access the /rpc and /stream endpoints
 			if path == "rpc" || path == "stream" {
 				for key, permissions := range keys {
-					if r.Header.Get("X-Access") == key {
+					if r.Header.Get("X-Access") == key ||
+						r.URL.Query().Get("access-key") == key {
+
 						r = r.WithContext(context.WithValue(
 							r.Context(),
 							"permissions", permissions,
