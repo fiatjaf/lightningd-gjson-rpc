@@ -1,19 +1,19 @@
 # The `sparko` plugin.
 
-The famous [Spark wallet](https://github.com/shesek/spark-wallet) repackaged as a single-binary plugin.
+The famous [Spark wallet](https://github.com/shesek/spark-wallet) repackaged as a single-binary lightningd plugin.
 
-This works either as a personal wallet with a nice UI (see link above) or as a full-blown HTTP-RPC bridge to your node that can be used to develop apps. In conjunction with the [`webhook` plugin](https://github.com/fiatjaf/lightningd-gjson-rpc/tree/master/cmd/webhook) it becomes even more powerful.
+This works either as a personal wallet with a nice UI (see link above) or as a **full-blown HTTP-RPC bridge to your node that can be used to develop apps**.
 
 It has some differences (advantages?) over the original Spark wallet:
 
-* Single binary: No dependencies to manage, just grab the manage and throw it in your `lightningd` plugins folder.
-* Runs as a plugin: this means you don't have to manage the server, it will be managed by `lightningd` and will always be running as long as your node is running.
-* Multiple keys with fine-grained permissions: create keys that can only call some methods.
-* Centralized options management: since it runs as a plugin all options are read from your `lightningd` config file.
-* Written in Go: lean, fast, relatively low on memory, doesn't require installing Node.js and a ton of dependencies.
-* Unrestricted: any method can be called through the HTTP/JSON-RPC interface, including any methods provided by plugins you might have active in your node.
-* Event streaming: makes it easy to write remote Lightning apps by exposing a [SSE stream](#listen-to-events) of all events (payments sent, received etc.) that happen on the node.
-* No default login: you don't have to expose "super user" credentials over your node. You can have only access-keys to specific methods. But you can define a login an password too, of course.
+  * Single binary: No dependencies to manage, just grab the manage and throw it in your `lightningd` plugins folder.
+  * Runs as a plugin: this means you don't have to manage the server, it will be managed by `lightningd` and will always be running as long as your node is running.
+  * Multiple keys with fine-grained permissions: create keys that can only call some methods.
+  * Centralized options management: since it runs as a plugin all options are read from your `lightningd` config file.
+  * Written in Go: lean, fast, relatively low on memory, doesn't require installing Node.js and a ton of dependencies.
+  * Unrestricted: any method can be called through the HTTP/JSON-RPC interface, including any methods provided by plugins you might have active in your node.
+  * Event streaming: makes it easy to write remote Lightning apps by exposing a [SSE stream](#listen-to-events) of all events (payments sent, received etc.) that happen on the node.
+  * No default login: you don't have to expose "super user" credentials over your node. You can have only access-keys to specific methods. But you can define a login an password too, of course.
 
 # How to install
 
@@ -87,6 +87,8 @@ Replace the following with your actual values:
 curl -k https://0.0.0.0:9737/rpc -d '{"method": "pay", "params": ["lnbc..."]}' -H 'X-Access masterkeythatcandoeverything'
 ```
 
+See also [a list of client libraries](#client-libraries).
+
 ### `Range` headers
 
 You can also limit the number of things you're returning. For example, `listinvoices` and `listsendpays` tend to get out of hand quickly and you may not want to return all your invoices and payments. You can add a `Range` header to solve this issue:
@@ -101,6 +103,13 @@ The above means that `sparko` will take the response it gets from `lightningd` a
 
 Sparko exposes a [SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) endpoint at `/stream` that emits [all events](https://lightning.readthedocs.io/PLUGINS.html#event-notifications) a plugin may receive, in raw format given by lightningd. In some cases that's what you want when developing applications that must talk to a Lightning node remotely, better than webhooks. There are libraries for listening to Server-Sent Events in all languages. The `/stream` endpoint requires the `stream` permission to be accessed.
 
+## Client libraries
+
+ * [JavaScript](https://github.com/fiatjaf/sparko-client) (Node.js and the browser)
+ * [Go](https://pkg.go.dev/github.com/fiatjaf/lightningd-gjson-rpc?tab=doc#Client) (initialize it with the Spark URL and key/token instead of a lightning-rpc socket path)
+
 ## Open the wallet UI
+
+This is the same code used in [Spark wallet](https://github.com/shesek/spark-wallet).
 
 Visit `https://0.0.0.0:9737/`. Only available if `sparko-login` is provided.
