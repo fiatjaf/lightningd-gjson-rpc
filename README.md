@@ -4,7 +4,7 @@ Since RPC calls are just relayed and wrapped, you can use **lightningd-gjson-rpc
 
 [![godoc.org](https://img.shields.io/badge/reference-godoc-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc)
 
-This is a simple and resistant client. It is made to survive against faulty **lightning** node interruptions. It can also talk to [spark](https://github.com/shesek/spark-wallet)/[sparko](https://github.com/fiatjaf/sparko) HTTP-RPC using the same API, so you can run your app and your node on different machines.
+This is a simple and resistant client. It is made to survive against faulty **lightning** node interruptions. It can also talk to [spark](https://github.com/shesek/spark-wallet)/[sparko](https://github.com/fiatjaf/lightningd-gjson-rpc/tree/master/cmd/sparko#client-libraries) HTTP-RPC using the same API, so you can run your app and your node on different machines.
 
 ## Usage
 
@@ -78,10 +78,6 @@ ln.CallNamed("invoice",
 Besides providing full access to the c-lightning RPC interface with `.Call` methods, we also have [ListenForInvoices](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.ListenForInvoices), [PayAndWaitUntilResolution](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.PayAndWaitUntilResolution) and [GetPrivateKey](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client.GetPrivateKey) to make your life better.
 
 It's good to say also that since we don't have hardcoded methods here you can call [custom RPC methods](https://lightning.readthedocs.io/PLUGINS.html#json-rpc-passthrough) with this library.
-
-## Who's using this?
-
-Besides our own plugins listed in the link above, there's also [@lntxbot](https://t.me/lntxbot), the Telegram Lightning wallet; [Sparko](https://github.com/fiatjaf/sparko), our better and cheaper alternative to Spark wallet; [Etleneum](https://etleneum.com/), the centralized smart contract platform; and [Lightning Charger](https://charger.alhur.es/), the lnurl-powered BTC-to-Lightning mobile wallet helper.
 
 ## Plugins
 
