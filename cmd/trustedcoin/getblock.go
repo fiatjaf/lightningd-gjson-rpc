@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
@@ -88,7 +90,13 @@ func getHash(height int64) (hash string, err error) {
 			continue
 		}
 
-		hash = string(data)
+		hash = strings.TrimSpace(string(data))
+
+		if len(hash) > 64 {
+			err = errors.New("got something that isn't a block hash: " + hash[:64])
+			continue
+		}
+
 		heightCache[height] = hash
 
 		return hash, nil

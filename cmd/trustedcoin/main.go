@@ -10,7 +10,7 @@ import (
 
 var (
 	esplora = []string{
-		"https://mempool.space/electrs",
+		"https://mempool.space/api",
 		"https://blockstream.info/api",
 	}
 )
@@ -28,7 +28,7 @@ func esploras() (ss []string) {
 func main() {
 	p := plugin.Plugin{
 		Name:    "trustedcoin",
-		Version: "v0.2.1",
+		Version: "v0.2.2",
 		RPCMethods: []plugin.RPCMethod{
 			{
 				"getrawblockbyheight",
