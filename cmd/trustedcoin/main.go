@@ -13,6 +13,7 @@ var (
 		"https://mempool.space/api",
 		"https://blockstream.info/api",
 		"https://explorer.bullbitcoin.com/api",
+		"https://mempool.emzy.de/api",
 	}
 )
 
