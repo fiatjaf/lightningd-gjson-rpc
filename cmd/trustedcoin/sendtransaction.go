@@ -14,11 +14,11 @@ type RawTransactionResponse struct {
 func sendRawTransaction(tx io.Reader) (resp RawTransactionResponse, err error) {
 	for _, endpoint := range esploras() {
 		w, errW := http.Post(endpoint+"/tx", "text/plain", tx)
-		defer w.Body.Close()
 		if errW != nil {
 			err = errW
 			continue
 		}
+		defer w.Body.Close()
 
 		if w.StatusCode >= 300 {
 			msg, _ := ioutil.ReadAll(w.Body)
