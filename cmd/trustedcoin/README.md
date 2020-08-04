@@ -24,7 +24,7 @@ apt update
 apt install lightningd
 cd /usr/libexec/c-lightning/plugins
 chmod -x bcli
-wget https://github.com/fiatjaf/lightningd-gjson-rpc/releases/download/trustedcoin-v0.2/trustedcoin_linux_amd64
+wget https://github.com/fiatjaf/lightningd-gjson-rpc/releases/download/trustedcoin-v0.2.4/trustedcoin_linux_amd64
 chmod +x trustedcoin_linux_amd64
 cd
 lightningd
