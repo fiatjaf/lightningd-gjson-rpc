@@ -81,4 +81,4 @@ It's good to say also that since we don't have hardcoded methods here you can ca
 
 ## Plugins
 
-We have a collection of plugins that expose or use our special methods. Read more about them at [cmd/](cmd/) or download binaries at [releases/](https://github.com/fiatjaf/lightningd-gjson-rpc/releases).
+If you want to write a plugin, we provide [helpers](plugin) to make that easy. Take a look at https://github.com/fiatjaf/sparko or https://github.com/fiatjaf/webhook for examples.

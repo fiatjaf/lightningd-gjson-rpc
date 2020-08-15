@@ -1,6 +1,0 @@
-node_modules
-*.swo
-*.swp
-dist
-bindata.go
-notifierbot
