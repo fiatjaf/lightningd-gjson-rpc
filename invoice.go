@@ -7,14 +7,16 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/chaincfg"
 	decodepay "github.com/fiatjaf/ln-decodepay"
+	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/zpay32"
 )
 
 func (ln *Client) InvoiceWithDescriptionHash(
 	label string,
 	msatoshi int64,
-	plainDescriptionOrHash interface{}, /* can be either a string (plainDescription) or a []byte (the hash directly) */
+	descriptionHash []byte,
 	ppreimage *[]byte,
 	pexpiry *time.Duration,
 ) (bolt11 string, err error) {
@@ -27,15 +29,6 @@ func (ln *Client) InvoiceWithDescriptionHash(
 		if err != nil {
 			return
 		}
-	}
-
-	var descriptionHash []byte
-	switch v := plainDescriptionOrHash.(type) {
-	case string:
-		dhash := sha256.Sum256([]byte(v))
-		descriptionHash = dhash[:]
-	case []byte:
-		descriptionHash = v
 	}
 
 	dhash32 := as32(descriptionHash)
@@ -78,6 +71,110 @@ func (ln *Client) InvoiceWithDescriptionHash(
 	bolt11, err = invoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(hash []byte) ([]byte, error) {
 			return btcec.SignCompact(btcec.S256(), privKey, hash, true)
+		},
+	})
+
+	return
+}
+
+func (ln *Client) InvoiceWithShadowRoute(
+	msatoshi int64,
+	descriptionOrHash interface{}, /* can be either a string (description) or a []byte (description_hash) */
+	ppreimage *[]byte,
+	pprivateKey **btcec.PrivateKey,
+	pexpiry *time.Duration,
+	baseFee uint32,
+	ppmFee uint32,
+	cltvExpiryDelta uint16,
+	channelId uint64,
+) (bolt11 string, paymentHash string, err error) {
+	// create a random preimage if one is not given
+	var preimage []byte
+	if ppreimage != nil {
+		preimage = *ppreimage
+	} else {
+		preimage = make([]byte, 32)
+		_, err = rand.Read(preimage)
+		if err != nil {
+			return
+		}
+	}
+	hash := sha256.Sum256(preimage)
+	paymentHash = hex.EncodeToString(hash[:])
+
+	// params for invoice creation
+	params := make([]func(*zpay32.Invoice), 4, 5)
+
+	// payment secret can be anything
+	params[0] = zpay32.PaymentAddr([32]byte{
+		1, 2, 3, 4, 5, 6, 7, 8,
+		9, 10, 11, 12, 13, 14, 15, 16,
+		17, 18, 19, 20, 21, 22, 23, 24,
+		25, 26, 27, 28, 29, 30, 31, 32,
+	})
+
+	// set expiry to 7 days if not given
+	if pexpiry != nil {
+		params[1] = zpay32.Expiry(*pexpiry)
+	} else {
+		params[1] = zpay32.Expiry(time.Duration(time.Hour * 24 * 7))
+	}
+
+	// set the description or description_hash
+	switch v := descriptionOrHash.(type) {
+	case string:
+		// it's a plain description (`d`)
+		params[2] = zpay32.Description(v)
+	case []byte:
+		// it's a description_hash (`h`)
+		descriptionHash := as32(v)
+		params[2] = zpay32.DescriptionHash(descriptionHash)
+	}
+
+	// set amount if not zero
+	if msatoshi > 0 {
+		params = append(params, zpay32.Amount(lnwire.MilliSatoshi(msatoshi)))
+	}
+
+	// set the shadow route hint with the public key of our real node
+	info, _ := ln.Call("getinfo")
+	nodeIdBytes, _ := hex.DecodeString(info.Get("id").String())
+	pubKey, err := btcec.ParsePubKey(nodeIdBytes, btcec.S256())
+	if err != nil {
+		return
+	}
+	params[3] = zpay32.RouteHint([]zpay32.HopHint{
+		{
+			NodeID:                    pubKey,
+			ChannelID:                 channelId,
+			FeeBaseMSat:               baseFee,
+			FeeProportionalMillionths: ppmFee,
+			CLTVExpiryDelta:           cltvExpiryDelta,
+		},
+	})
+
+	// create the invoice
+	invoice, err := zpay32.NewInvoice(&chaincfg.MainNetParams, hash, time.Now(), params...)
+	if err != nil {
+		return
+	}
+
+	// create a private key if one is not given, we need it to sign
+	var privateKey *btcec.PrivateKey
+	if pprivateKey != nil {
+		privateKey = *pprivateKey
+	} else {
+		randomBytes := make([]byte, 32)
+		_, err = rand.Read(randomBytes)
+		if err != nil {
+			return
+		}
+		privateKey, _ = btcec.PrivKeyFromBytes(btcec.S256(), randomBytes)
+	}
+
+	bolt11, err = invoice.Encode(zpay32.MessageSigner{
+		SignCompact: func(hash []byte) ([]byte, error) {
+			return btcec.SignCompact(btcec.S256(), privateKey, hash, true)
 		},
 	})
 
