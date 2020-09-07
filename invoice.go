@@ -103,7 +103,7 @@ func (ln *Client) InvoiceWithShadowRoute(
 	paymentHash = hex.EncodeToString(hash[:])
 
 	// params for invoice creation
-	params := make([]func(*zpay32.Invoice), 4, 5)
+	params := make([]func(*zpay32.Invoice), 5, 6)
 
 	// payment secret can be anything
 	params[0] = zpay32.PaymentAddr([32]byte{
@@ -151,6 +151,13 @@ func (ln *Client) InvoiceWithShadowRoute(
 			FeeProportionalMillionths: ppmFee,
 			CLTVExpiryDelta:           cltvExpiryDelta,
 		},
+	})
+
+	params[4] = zpay32.Features(&lnwire.FeatureVector{
+		RawFeatureVector: lnwire.NewRawFeatureVector(
+			lnwire.PaymentAddrOptional,
+			lnwire.TLVOnionPayloadOptional,
+		),
 	})
 
 	// create the invoice
