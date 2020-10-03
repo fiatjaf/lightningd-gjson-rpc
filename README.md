@@ -81,4 +81,4 @@ It's good to say also that since we don't have hardcoded methods here you can ca
 
 ## Plugins
 
-If you want to write a plugin, we provide [helpers](plugin) to make that easy. Take a look at https://github.com/fiatjaf/sparko or https://github.com/fiatjaf/webhook for examples.
+If you want to write a plugin, we provide [helpers](plugin) to make that easy. Take a look at https://github.com/fiatjaf/sparko or https://github.com/fiatjaf/lightningd-webhook for examples.
