@@ -18,6 +18,7 @@ type Plugin struct {
 	Logf    func(string, ...interface{}) `json:"-"`
 	Name    string                       `json:"-"`
 	Version string                       `json:"-"`
+	Network string                       `json:"-"`
 
 	Options       []Option       `json:"options"`
 	RPCMethods    []RPCMethod    `json:"rpcmethods"`
@@ -146,6 +147,9 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 			conf := iconf.(map[string]interface{})
 			ilnpath := conf["lightning-dir"]
 			irpcfile := conf["rpc-file"]
+
+			p.Network = conf["network"].(string)
+
 			rpc := path.Join(ilnpath.(string), irpcfile.(string))
 
 			p.Client = &lightning.Client{Path: rpc}
