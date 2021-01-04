@@ -24,7 +24,7 @@ type Plugin struct {
 	RPCMethods    []RPCMethod    `json:"rpcmethods"`
 	Subscriptions []Subscription `json:"subscriptions"`
 	Hooks         []Hook         `json:"hooks"`
-	Features      Features       `json:"features"`
+	Features      Features       `json:"featurebits"`
 	Dynamic       bool           `json:"dynamic"`
 
 	Args   Params        `json:"-"`
