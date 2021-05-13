@@ -161,7 +161,8 @@ func (ln *Client) InvoiceWithShadowRoute(
 	})
 
 	// create the invoice
-	invoice, err := zpay32.NewInvoice(&chaincfg.MainNetParams, hash, time.Now(), params...)
+	invoice, err := zpay32.NewInvoice(&chaincfg.MainNetParams,
+		hash, time.Now(), params...)
 	if err != nil {
 		return
 	}

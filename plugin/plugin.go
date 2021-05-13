@@ -20,12 +20,13 @@ type Plugin struct {
 	Version string                       `json:"-"`
 	Network string                       `json:"-"`
 
-	Options       []Option       `json:"options"`
-	RPCMethods    []RPCMethod    `json:"rpcmethods"`
-	Subscriptions []Subscription `json:"subscriptions"`
-	Hooks         []Hook         `json:"hooks"`
-	Features      Features       `json:"featurebits"`
-	Dynamic       bool           `json:"dynamic"`
+	Options       []Option            `json:"options"`
+	RPCMethods    []RPCMethod         `json:"rpcmethods"`
+	Subscriptions []Subscription      `json:"subscriptions"`
+	Hooks         []Hook              `json:"hooks"`
+	Features      Features            `json:"featurebits"`
+	Dynamic       bool                `json:"dynamic"`
+	Notifications []NotificationTopic `json:"notifications"`
 
 	Args   Params        `json:"-"`
 	OnInit func(*Plugin) `json:"-"`
@@ -36,6 +37,10 @@ type Features struct {
 	Channel string `json:"channel"`
 	Init    string `json:"init"`
 	Invoice string `json:"invoice"`
+}
+
+type NotificationTopic struct {
+	Method string `json:"method"`
 }
 
 type Option struct {
