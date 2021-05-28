@@ -145,6 +145,30 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 		}
 
 		switch msg.Method {
+		case "getmanifest":
+			if p.Options == nil {
+				p.Options = make([]Option, 0)
+			}
+			if p.RPCMethods == nil {
+				p.RPCMethods = make([]RPCMethod, 0)
+			}
+			if p.Hooks == nil {
+				p.Hooks = make([]Hook, 0)
+			}
+			if p.Notifications == nil {
+				p.Notifications = make([]NotificationTopic, 0)
+			}
+			if p.Subscriptions == nil {
+				p.Subscriptions = make([]Subscription, 0)
+			}
+
+			jmanifest, _ := json.Marshal(p)
+			response := lightning.JSONRPCResponse{
+				Version: msg.Version,
+				Id:      msg.Id,
+			}
+			json.Unmarshal([]byte(jmanifest), &response.Result)
+			outgoing.Encode(response)
 		case "init":
 			params := msg.Params.(map[string]interface{})
 
@@ -166,27 +190,6 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 				Version: msg.Version,
 				Id:      msg.Id,
 			})
-		case "getmanifest":
-			if p.Options == nil {
-				p.Options = make([]Option, 0)
-			}
-			if p.RPCMethods == nil {
-				p.RPCMethods = make([]RPCMethod, 0)
-			}
-			if p.Hooks == nil {
-				p.Hooks = make([]Hook, 0)
-			}
-			if p.Subscriptions == nil {
-				p.Subscriptions = make([]Subscription, 0)
-			}
-
-			jmanifest, _ := json.Marshal(p)
-			response := lightning.JSONRPCResponse{
-				Version: msg.Version,
-				Id:      msg.Id,
-			}
-			json.Unmarshal([]byte(jmanifest), &response.Result)
-			outgoing.Encode(response)
 		default:
 			go handleMessage(p, outgoing, msg)
 		}
