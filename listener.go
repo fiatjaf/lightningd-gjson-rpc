@@ -1,7 +1,6 @@
 package lightning
 
 import (
-	"log"
 	"time"
 )
 
@@ -15,7 +14,6 @@ func (ln *Client) ListenForInvoices() {
 	go func() {
 		for {
 			if ln.PaymentHandler == nil {
-				log.Print("won't listen for invoices: no PaymentHandler.")
 				return
 			}
 
@@ -25,7 +23,6 @@ func (ln *Client) ListenForInvoices() {
 				if _, ok := err.(ErrorTimeout); ok {
 					time.Sleep(time.Minute)
 				} else {
-					log.Printf("error waiting for invoice %d: %s", ln.LastInvoiceIndex, err.Error())
 					time.Sleep(5 * time.Second)
 				}
 				continue
