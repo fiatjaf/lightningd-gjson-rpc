@@ -177,14 +177,16 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 
 			p.Network = conf["network"].(string)
 
-			ilnpath := conf["lightning-dir"]
-			irpcfile := conf["rpc-file"]
-			rpc := filepath.Join(ilnpath.(string), irpcfile.(string))
-			if filepath.IsAbs(irpcfile.(string)) {
-				rpc = irpcfile.(string)
+			lnpath := conf["lightning-dir"].(string)
+			rpcfile := conf["rpc-file"].(string)
+			rpc := filepath.Join(lnpath, rpcfile)
+			if filepath.IsAbs(rpcfile) {
+				rpc = rpcfile
 			}
-
-			p.Client = &lightning.Client{Path: rpc}
+			p.Client = &lightning.Client{
+				Path:         rpc,
+				LightningDir: lnpath,
+			}
 			p.Args = Params(params["options"].(map[string]interface{}))
 
 			p.Log("initialized plugin " + p.Version)

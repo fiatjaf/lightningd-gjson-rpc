@@ -37,7 +37,11 @@ func (ln *Client) GetCustomBytes(
 	if ln.Path == "" {
 		return nil, errors.New("Path must be set so we know where the lightning folder is.")
 	}
-	lightningdir := filepath.Dir(ln.Path)
+
+	lightningdir := ln.LightningDir
+	if lightningdir == "" {
+		lightningdir = filepath.Dir(ln.Path)
+	}
 	hsmsecretpath := filepath.Join(lightningdir, "hsm_secret")
 
 	hash := sha256.New

@@ -22,7 +22,8 @@ type Client struct {
 	CallTimeout      time.Duration
 
 	// lightning-rpc socket
-	Path string
+	Path         string
+	LightningDir string
 
 	// spark/sparko server
 	SparkURL              string
