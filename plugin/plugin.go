@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 )
@@ -179,7 +179,7 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 
 			p.Network = conf["network"].(string)
 
-			rpc := path.Join(ilnpath.(string), irpcfile.(string))
+			rpc := filepath.Join(ilnpath.(string), irpcfile.(string))
 
 			p.Client = &lightning.Client{Path: rpc}
 			p.Args = Params(params["options"].(map[string]interface{}))
