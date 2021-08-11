@@ -174,12 +174,15 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 
 			iconf := params["configuration"]
 			conf := iconf.(map[string]interface{})
-			ilnpath := conf["lightning-dir"]
-			irpcfile := conf["rpc-file"]
 
 			p.Network = conf["network"].(string)
 
+			ilnpath := conf["lightning-dir"]
+			irpcfile := conf["rpc-file"]
 			rpc := filepath.Join(ilnpath.(string), irpcfile.(string))
+			if filepath.IsAbs(irpcfile.(string)) {
+				rpc = irpcfile.(string)
+			}
 
 			p.Client = &lightning.Client{Path: rpc}
 			p.Args = Params(params["options"].(map[string]interface{}))
