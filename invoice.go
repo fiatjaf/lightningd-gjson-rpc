@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -12,6 +14,8 @@ import (
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/zpay32"
 )
+
+const DESCRIPTION_HASH_DESCRIPTION_PREFIX = "with description_hash: "
 
 func (ln *Client) InvoiceWithDescriptionHash(
 	label string,
@@ -31,7 +35,6 @@ func (ln *Client) InvoiceWithDescriptionHash(
 		}
 	}
 
-	dhash32 := as32(descriptionHash)
 	description_hash := hex.EncodeToString(descriptionHash)
 
 	// create an invoice at the node so it expects for a payment at this hash
@@ -40,7 +43,7 @@ func (ln *Client) InvoiceWithDescriptionHash(
 		"label":       label,
 		"msatoshi":    msatoshi,
 		"preimage":    hex.EncodeToString(preimage),
-		"description": "with description_hash: " + description_hash,
+		"description": DESCRIPTION_HASH_DESCRIPTION_PREFIX + description_hash,
 	}
 
 	if pexpiry != nil {
@@ -54,10 +57,26 @@ func (ln *Client) InvoiceWithDescriptionHash(
 
 	// now create another invoice, this time with the desired description_hash instead
 	bolt11 = inv.Get("bolt11").String()
+	return ln.TranslateInvoiceWithDescriptionHash(bolt11)
+}
+
+func (ln *Client) TranslateInvoiceWithDescriptionHash(bolt11 string) (string, error) {
 	invoice, err := zpay32.Decode(bolt11, decodepay.ChainFromCurrency(bolt11[2:]))
 	if err != nil {
-		return
+		return "", fmt.Errorf("failed to decode bolt11: %w", err)
 	}
+
+	// grab description_hash from description
+	if invoice.Description == nil {
+		return "", errors.New("given bolt11 doesn't have a text description")
+	}
+	descriptionHashHex := (*invoice.Description)[len(DESCRIPTION_HASH_DESCRIPTION_PREFIX):]
+	descriptionHash, err := hex.DecodeString(descriptionHashHex)
+	if err != nil {
+		return "", fmt.Errorf("given bolt11 doesn't have a valid description_hash in its text description: %w", err)
+	}
+	dhash32 := as32(descriptionHash)
+
 	invoice.Description = nil
 	invoice.Destination = nil
 	invoice.DescriptionHash = &dhash32
@@ -65,16 +84,16 @@ func (ln *Client) InvoiceWithDescriptionHash(
 	// finally sign this new invoice
 	privKey, err := ln.GetPrivateKey()
 	if err != nil {
-		return
+		return "", err
 	}
 
-	bolt11, err = invoice.Encode(zpay32.MessageSigner{
+	translatedBolt11, err := invoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(hash []byte) ([]byte, error) {
 			return btcec.SignCompact(btcec.S256(), privKey, hash, true)
 		},
 	})
 
-	return
+	return translatedBolt11, err
 }
 
 func (ln *Client) InvoiceWithShadowRoute(
