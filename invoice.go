@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
-	decodepay "github.com/fiatjaf/ln-decodepay"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/zpay32"
 )
@@ -61,7 +61,12 @@ func (ln *Client) InvoiceWithDescriptionHash(
 }
 
 func (ln *Client) TranslateInvoiceWithDescriptionHash(bolt11 string) (string, error) {
-	invoice, err := zpay32.Decode(bolt11, decodepay.ChainFromCurrency(bolt11[2:]))
+	firstNumber := strings.IndexAny(bolt11, "1234567890")
+	chainPrefix := bolt11[2:firstNumber]
+	chain := &chaincfg.Params{
+		Bech32HRPSegwit: chainPrefix,
+	}
+	invoice, err := zpay32.Decode(bolt11, chain)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode bolt11: %w", err)
 	}
