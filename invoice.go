@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/lightningnetwork/lnd/lnwire"
 	"github.com/lightningnetwork/lnd/zpay32"
@@ -94,7 +95,7 @@ func (ln *Client) TranslateInvoiceWithDescriptionHash(bolt11 string) (string, er
 
 	translatedBolt11, err := invoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(hash []byte) ([]byte, error) {
-			return btcec.SignCompact(btcec.S256(), privKey, hash, true)
+			return ecdsa.SignCompact(privKey, hash, true)
 		},
 	})
 
@@ -163,7 +164,7 @@ func (ln *Client) InvoiceWithShadowRoute(
 	// set the shadow route hint with the public key of our real node
 	info, _ := ln.Call("getinfo")
 	nodeIdBytes, _ := hex.DecodeString(info.Get("id").String())
-	pubKey, err := btcec.ParsePubKey(nodeIdBytes, btcec.S256())
+	pubKey, err := btcec.ParsePubKey(nodeIdBytes)
 	if err != nil {
 		return
 	}
@@ -201,12 +202,12 @@ func (ln *Client) InvoiceWithShadowRoute(
 		if err != nil {
 			return
 		}
-		privateKey, _ = btcec.PrivKeyFromBytes(btcec.S256(), randomBytes)
+		privateKey, _ = btcec.PrivKeyFromBytes(randomBytes)
 	}
 
 	bolt11, err = invoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(hash []byte) ([]byte, error) {
-			return btcec.SignCompact(btcec.S256(), privateKey, hash, true)
+			return ecdsa.SignCompact(privateKey, hash, true)
 		},
 	})
 

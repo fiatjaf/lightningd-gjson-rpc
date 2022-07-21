@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -26,7 +26,7 @@ func (ln *Client) GetCustomKey(
 	if err != nil {
 		return nil, err
 	}
-	sk, _ = btcec.PrivKeyFromBytes(btcec.S256(), key)
+	sk, _ = btcec.PrivKeyFromBytes(key)
 	return
 }
 
