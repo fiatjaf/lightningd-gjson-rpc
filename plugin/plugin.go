@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
 )
@@ -122,11 +123,13 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 	// logging
 	prefix := p.colorize("plugin-" + p.Name)
 	p.Log = func(args ...interface{}) {
-		args = append([]interface{}{prefix + " "}, args...)
+		timestamp := time.Now().Format("2006-01-02T15:04:05.999Z")
+		args = append([]interface{}{timestamp, prefix}, args...)
 		fmt.Fprintln(os.Stderr, args...)
 	}
 	p.Logf = func(b string, args ...interface{}) {
-		fmt.Fprintf(os.Stderr, prefix+" "+b+"\n", args...)
+		timestamp := time.Now().Format("2006-01-02T15:04:05.999Z")
+		fmt.Fprintf(os.Stderr, timestamp+" "+prefix+" "+b+"\n", args...)
 	}
 
 	var msg lightning.JSONRPCMessage
