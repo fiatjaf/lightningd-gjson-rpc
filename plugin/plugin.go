@@ -122,13 +122,14 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 
 	// logging
 	prefix := p.colorize("plugin-" + p.Name)
+	timeformat := "2006-01-02T15:04:05.000Z"
 	p.Log = func(args ...interface{}) {
-		timestamp := time.Now().Format("2006-01-02T15:04:05.999Z")
+		timestamp := time.Now().Format(timeformat)
 		args = append([]interface{}{timestamp, prefix}, args...)
 		fmt.Fprintln(os.Stderr, args...)
 	}
 	p.Logf = func(b string, args ...interface{}) {
-		timestamp := time.Now().Format("2006-01-02T15:04:05.999Z")
+		timestamp := time.Now().Format(timeformat)
 		fmt.Fprintf(os.Stderr, timestamp+" "+prefix+" "+b+"\n", args...)
 	}
 
