@@ -6,11 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	lightning "github.com/fiatjaf/lightningd-gjson-rpc"
+)
+
+const (
+	timeformat = "2006-01-02T15:04:05.000Z"
 )
 
 type Plugin struct {
@@ -77,6 +83,19 @@ type RPCHandler func(p *Plugin, params Params) (resp interface{}, errCode int, e
 type NotificationHandler func(p *Plugin, params Params)
 type HookHandler func(p *Plugin, params Params) (resp interface{})
 
+type LogProxy struct {
+	prefix string
+	target io.Writer
+}
+
+func (lp *LogProxy) Write(p []byte) (n int, err error) {
+	timestamp := time.Now().Format(timeformat)
+
+	res := fmt.Sprintf("%s %s %s", timestamp, lp.prefix, p)
+	res = strings.TrimRight(res, "\n ")
+	return lp.target.Write([]byte(res + "\n"))
+}
+
 func (p *Plugin) Run() {
 	initialized := make(chan bool)
 
@@ -122,15 +141,18 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 
 	// logging
 	prefix := p.colorize("plugin-" + p.Name)
-	timeformat := "2006-01-02T15:04:05.000Z"
+	logproxy := &LogProxy{
+		prefix: prefix,
+		target: os.Stderr,
+	}
+	log.SetOutput(logproxy)
+	log.SetFlags(0)
+
 	p.Log = func(args ...interface{}) {
-		timestamp := time.Now().Format(timeformat)
-		args = append([]interface{}{timestamp, prefix}, args...)
-		fmt.Fprintln(os.Stderr, args...)
+		fmt.Fprint(logproxy, args...)
 	}
 	p.Logf = func(b string, args ...interface{}) {
-		timestamp := time.Now().Format(timeformat)
-		fmt.Fprintf(os.Stderr, timestamp+" "+prefix+" "+b+"\n", args...)
+		fmt.Fprintf(logproxy, b, args...)
 	}
 
 	var msg lightning.JSONRPCMessage
