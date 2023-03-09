@@ -1,6 +1,7 @@
 package lightning
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"time"
@@ -94,7 +95,11 @@ func (ln *Client) CallMessageRaw(timeout time.Duration, message JSONRPCMessage) 
 	if message.Params == nil {
 		message.Params = make([]string, 0)
 	}
-	mbytes, _ := json.Marshal(message)
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	encoder.Encode(message)
+	mbytes := buffer.Bytes()
 
 	if ln.Path != "" {
 		// it's a socket client
