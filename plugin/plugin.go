@@ -35,6 +35,7 @@ type Plugin struct {
 	Dynamic       bool                `json:"dynamic"`
 	Notifications []NotificationTopic `json:"notifications"`
 
+	Configuration  Params            `json:"-"`
 	Args   Params        `json:"-"`
 	OnInit func(*Plugin) `json:"-"`
 }
@@ -201,6 +202,7 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 			iconf := params["configuration"]
 			conf := iconf.(map[string]interface{})
 
+			p.Configuration = Params(conf)
 			p.Network = conf["network"].(string)
 
 			lnpath := conf["lightning-dir"].(string)
