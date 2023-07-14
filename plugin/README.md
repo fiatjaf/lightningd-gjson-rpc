@@ -27,17 +27,23 @@ With the above, the [![godoc reference](https://img.shields.io/badge/godoc-refer
 ```go
 package main
 
-import "github.com/fiatjaf/lightningd-gjson-rpc/plugin"
+import (
+  "errors"
+  "time"
+
+  "github.com/fiatjaf/lightningd-gjson-rpc/plugin"
+)
 
 func main() {
     p := plugin.Plugin{
         Name: "useless",
-        Version: "v1.0"
+        Version: "v1.0",
         Options: []plugin.Option{
             {
                  "payment-adjective",
                  "string",
-                 "How do you want your payments to be called.",
+                 "default-value",
+								 "How do you want your payments to be called.",
             },
         },
         RPCMethods: []plugin.RPCMethod{
@@ -46,7 +52,7 @@ func main() {
                 "arg1 [arg2]",
                 "does nothing with {arg1} and optional {arg2}.",
                 "",
-                func (p *plugin.Plugin, params Params) (interface{}, int, error) {
+                func (p *plugin.Plugin, params plugin.Params) (interface{}, int, error) {
                     arg1 := params.Get("arg1").String()
                     arg2 := params.Get("arg2").String()
 
