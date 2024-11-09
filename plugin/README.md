@@ -20,7 +20,7 @@ To instantiate your `Plugin` struct you'll need some values:
 
 From inside the functions and handlers you'll have access to a `plugin.Plugin` struct with `Args`, the set of options passed to the plugins from lightningd initialization; `Log` and `Logf`, basic logging functions that will print a line to the lightningd logs prefixed with your plugin name; and `Client`, a [lightningd-gjson-rpc](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc#Client) client you can use to call methods on lightningd.
 
-With the above, the [![godoc reference](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc/plugin) and the [Plugins docs](https://lightning.readthedocs.io/PLUGINS.html#hooks) you'll be able to make any plugin you want.
+With the above, the [![godoc reference](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/fiatjaf/lightningd-gjson-rpc/plugin) and the [Plugins docs](https://docs.corelightning.org/docs/plugin-development) you'll be able to make any plugin you want.
 
 ## Example plugin
 
