@@ -35,9 +35,9 @@ type Plugin struct {
 	Dynamic       bool                `json:"dynamic"`
 	Notifications []NotificationTopic `json:"notifications"`
 
-	Configuration  Params            `json:"-"`
-	Args   Params        `json:"-"`
-	OnInit func(*Plugin) `json:"-"`
+	Configuration Params        `json:"-"`
+	Args          Params        `json:"-"`
+	OnInit        func(*Plugin) `json:"-"`
 }
 
 type Features struct {
@@ -223,6 +223,11 @@ func (p *Plugin) Listener(initialized chan<- bool) {
 				Version: msg.Version,
 				Id:      msg.Id,
 			})
+		case "shutdown":
+			if shutdown, ok := submap["shutdown"]; ok {
+				shutdown.Handler(p, msg.Params.(map[string]interface{}))
+			}
+			return
 		default:
 			go handleMessage(p, outgoing, msg)
 		}
