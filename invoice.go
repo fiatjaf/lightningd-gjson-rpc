@@ -95,7 +95,7 @@ func (ln *Client) TranslateInvoiceWithDescriptionHash(bolt11 string) (string, er
 
 	translatedBolt11, err := invoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(hash []byte) ([]byte, error) {
-			return ecdsa.SignCompact(privKey, hash, true)
+			return ecdsa.SignCompact(privKey, hash, true), nil
 		},
 	})
 
@@ -207,7 +207,7 @@ func (ln *Client) InvoiceWithShadowRoute(
 
 	bolt11, err = invoice.Encode(zpay32.MessageSigner{
 		SignCompact: func(hash []byte) ([]byte, error) {
-			return ecdsa.SignCompact(privateKey, hash, true)
+			return ecdsa.SignCompact(privateKey, hash, true), nil
 		},
 	})
 
